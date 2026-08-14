@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence
+                                 https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
+
+    <persistence-unit name="posPU" transaction-type="RESOURCE_LOCAL">
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+        <class>pos.model.Korisnik</class>
+        <class>pos.model.Kategorija</class>
+        <class>pos.model.Dobavljac</class>
+        <class>pos.model.Artikal</class>
+        <class>pos.model.Akcija</class>
+        <class>pos.model.Nabavka</class>
+        <class>pos.model.StavkaNabavke</class>
+        <class>pos.model.Racun</class>
+        <class>pos.model.StavkaRacuna</class>
+        <class>pos.model.Povrat</class>
+        <class>pos.model.Otpis</class>
+        <class>pos.model.Brojac</class>
+
+        <class>pos.data.KonverterLocalDate</class>
+        <class>pos.data.KonverterLocalDateTime</class>
+
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+        <properties>
+            <property name="jakarta.persistence.jdbc.driver" value="org.sqlite.JDBC"/>
+            <property name="jakarta.persistence.jdbc.url" value="jdbc:sqlite:pos.db"/>
+
+            <property name="hibernate.dialect" value="org.hibernate.community.dialect.SQLiteDialect"/>
+
+            <property name="hibernate.hbm2ddl.auto" value="none"/>
+            <property name="hibernate.show_sql" value="false"/>
+
+            <property name="hibernate.connection.pool_size" value="1"/>
+            <property name="hibernate.connection.foreign_keys" value="true"/>
+            <property name="hibernate.connection.busy_timeout" value="5000"/>
+        </properties>
+    </persistence-unit>
+</persistence>

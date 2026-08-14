@@ -150,6 +150,7 @@ public class Baza {
         }
     }
 
+
     private long broj(String jpql, String parametar, Object vrijednost) {
         EntityManager em = JPA.em();
         try {
@@ -160,6 +161,8 @@ public class Baza {
             em.close();
         }
     }
+
+
 
     public List<Korisnik> getKorisnici() {
         EntityManager em = JPA.em();
@@ -308,6 +311,7 @@ public class Baza {
         }
     }
 
+
     public List<Kategorija> getKategorije() {
         EntityManager em = JPA.em();
         try {
@@ -423,5 +427,7 @@ public class Baza {
             em.close();
         }
     }
+
+
 
 }
