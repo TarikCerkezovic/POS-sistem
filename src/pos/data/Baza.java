@@ -673,4 +673,102 @@ public class Baza {
         }
     }
 
+    private static final String JPQL_AKCIJA = """
+            SELECT NEW pos.model.Akcija(a.id, a.sifraArtikla, ar.naziv, a.odDatuma, a.doDatuma, a.popustProcenat)
+            FROM Akcija a, Artikal ar
+            WHERE ar.sifra = a.sifraArtikla""";
+
+    public List<Akcija> getAkcije() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery(JPQL_AKCIJA + " ORDER BY a.id", Akcija.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Akcija aktivnaAkcija(String sifraArtikla, LocalDate datum) {
+        EntityManager em = JPA.em();
+        try {
+            List<Akcija> lista = em.createQuery(JPQL_AKCIJA
+                    + " AND a.sifraArtikla = :sifra AND a.odDatuma <= :datum AND a.doDatuma >= :datum",
+                    Akcija.class)
+                    .setParameter("sifra", sifraArtikla)
+                    .setParameter("datum", datum)
+                    .getResultList();
+            if (lista.isEmpty()) {
+                return null;
+            }
+            return lista.get(0);
+        } finally {
+            em.close();
+        }
+    }
+
+    public Akcija dodajAkciju(String sifraArtikla, LocalDate od, LocalDate doD, double popust) {
+        Artikal art = nadjiArtikal(sifraArtikla);
+        if (art == null) {
+            throw new IllegalArgumentException("Artikal nije pronađen!");
+        }
+        if (od.isAfter(doD)) {
+            throw new IllegalArgumentException("Datum početka akcije je poslije datuma kraja!");
+        }
+        if (popust <= 0 || popust >= 100) {
+            throw new IllegalArgumentException("Popust mora biti između 1 i 99%!");
+        }
+        long preklapanja;
+        EntityManager emProvjera = JPA.em();
+        try {
+            preklapanja = emProvjera.createQuery("""
+                    SELECT COUNT(a) FROM Akcija a
+                    WHERE a.sifraArtikla = :sifra AND a.odDatuma <= :doD AND a.doDatuma >= :od""", Long.class)
+                    .setParameter("sifra", sifraArtikla)
+                    .setParameter("doD", doD)
+                    .setParameter("od", od)
+                    .getSingleResult();
+        } finally {
+            emProvjera.close();
+        }
+        if (preklapanja > 0) {
+            throw new IllegalArgumentException("Za ovaj artikal već postoji akcija u zadanom periodu!");
+        }
+        Akcija akcija = new Akcija(0, sifraArtikla, art.getNaziv(), od, doD, popust);
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            em.persist(akcija);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+        return akcija;
+    }
+
+    public void obrisiAkciju(int id) {
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Akcija a = em.find(Akcija.class, id);
+            if (a != null) {
+                em.remove(a);
+            }
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
 }
