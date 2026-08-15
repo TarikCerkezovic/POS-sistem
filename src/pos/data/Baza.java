@@ -524,4 +524,153 @@ public class Baza {
         }
     }
 
+    public List<Artikal> getArtikli() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT a FROM Artikal a ORDER BY a.sifra", Artikal.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Artikal nadjiArtikal(String sifra) {
+        EntityManager em = JPA.em();
+        try {
+            return em.find(Artikal.class, sifra);
+        } finally {
+            em.close();
+        }
+    }
+
+    public Artikal dodajArtikal(String sifra, String naziv, int kategorijaId, String jm,
+                                String proizvodjac, double cijena, int dobavljacId) {
+        provjeriArtikal(sifra, naziv, cijena);
+        if (nadjiArtikal(sifra.trim()) != null) {
+            throw new IllegalArgumentException("Artikal sa šifrom \"" + sifra + "\" već postoji!");
+        }
+        Artikal a = new Artikal(sifra.trim(), naziv.trim(), kategorijaId, jm.trim(),
+                proizvodjac.trim(), 0, Util.round2(cijena), dobavljacId);
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            em.persist(a);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+        return a;
+    }
+
+    public void izmijeniArtikal(String staraSifra, String sifra, String naziv, int kategorijaId,
+                                String jm, String proizvodjac, double cijena, int dobavljacId) {
+        if (nadjiArtikal(staraSifra) == null) {
+            throw new IllegalArgumentException("Artikal nije pronađen!");
+        }
+        provjeriArtikal(sifra, naziv, cijena);
+        if (!staraSifra.equals(sifra.trim()) && nadjiArtikal(sifra.trim()) != null) {
+            throw new IllegalArgumentException("Artikal sa šifrom \"" + sifra + "\" već postoji!");
+        }
+        if (staraSifra.equals(sifra.trim())) {
+            izmijeniArtikalIstaSifra(staraSifra, naziv, kategorijaId, jm, proizvodjac, cijena, dobavljacId);
+        } else {
+            izmijeniArtikalNovaSifra(staraSifra, sifra, naziv, kategorijaId, jm, proizvodjac, cijena, dobavljacId);
+        }
+    }
+
+    private void izmijeniArtikalIstaSifra(String staraSifra, String naziv, int kategorijaId,
+                                          String jm, String proizvodjac, double cijena, int dobavljacId) {
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Artikal a = em.find(Artikal.class, staraSifra);
+            if (a == null) {
+                throw new IllegalArgumentException("Artikal nije pronađen!");
+            }
+            a.setNaziv(naziv.trim());
+            a.setKategorijaId(kategorijaId);
+            a.setJedinicaMjere(jm.trim());
+            a.setProizvodjac(proizvodjac.trim());
+            a.setCijena(Util.round2(cijena));
+            a.setDobavljacId(dobavljacId);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    private void izmijeniArtikalNovaSifra(String staraSifra, String sifra, String naziv, int kategorijaId,
+                                          String jm, String proizvodjac, double cijena, int dobavljacId) {
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            em.createNativeQuery("""
+                    UPDATE artikal SET sifra = ?1, naziv = ?2, kategorija_id = ?3, jedinica_mjere = ?4,
+                           proizvodjac = ?5, cijena = ?6, dobavljac_id = ?7 WHERE sifra = ?8""")
+                    .setParameter(1, sifra.trim())
+                    .setParameter(2, naziv.trim())
+                    .setParameter(3, kategorijaId)
+                    .setParameter(4, jm.trim())
+                    .setParameter(5, proizvodjac.trim())
+                    .setParameter(6, Util.round2(cijena))
+                    .setParameter(7, dobavljacId)
+                    .setParameter(8, staraSifra)
+                    .executeUpdate();
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    private void provjeriArtikal(String sifra, String naziv, double cijena) {
+        if (sifra.trim().isEmpty()) {
+            throw new IllegalArgumentException("Šifra artikla ne smije biti prazna!");
+        }
+        if (naziv.trim().isEmpty()) {
+            throw new IllegalArgumentException("Naziv artikla ne smije biti prazan!");
+        }
+        if (cijena <= 0) {
+            throw new IllegalArgumentException("Cijena mora biti veća od 0!");
+        }
+    }
+
+    public void obrisiArtikal(String sifra) {
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Artikal a = em.find(Artikal.class, sifra);
+            if (a == null) {
+                throw new IllegalArgumentException("Artikal nije pronađen!");
+            }
+            em.remove(a);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
 }
