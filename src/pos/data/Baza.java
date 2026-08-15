@@ -150,7 +150,6 @@ public class Baza {
         }
     }
 
-
     private long broj(String jpql, String parametar, Object vrijednost) {
         EntityManager em = JPA.em();
         try {
@@ -161,8 +160,6 @@ public class Baza {
             em.close();
         }
     }
-
-
 
     public List<Korisnik> getKorisnici() {
         EntityManager em = JPA.em();
@@ -311,7 +308,6 @@ public class Baza {
         }
     }
 
-
     public List<Kategorija> getKategorije() {
         EntityManager em = JPA.em();
         try {
@@ -428,6 +424,104 @@ public class Baza {
         }
     }
 
+    public List<Dobavljac> getDobavljaci() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT d FROM Dobavljac d ORDER BY d.id", Dobavljac.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
 
+    public Dobavljac nadjiDobavljaca(int id) {
+        EntityManager em = JPA.em();
+        try {
+            return em.find(Dobavljac.class, id);
+        } finally {
+            em.close();
+        }
+    }
+
+    public Dobavljac dodajDobavljaca(String naziv, String adresa, String telefon, String email) {
+        if (naziv.trim().isEmpty()) {
+            throw new IllegalArgumentException("Naziv dobavljača ne smije biti prazan!");
+        }
+        Dobavljac d = new Dobavljac(0, naziv.trim(), adresa.trim(), telefon.trim(), email.trim());
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            em.persist(d);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+        return d;
+    }
+
+    public void izmijeniDobavljaca(int id, String naziv, String adresa, String telefon, String email) {
+        if (nadjiDobavljaca(id) == null) {
+            throw new IllegalArgumentException("Dobavljač nije pronađen!");
+        }
+        if (naziv.trim().isEmpty()) {
+            throw new IllegalArgumentException("Naziv dobavljača ne smije biti prazan!");
+        }
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Dobavljac d = em.find(Dobavljac.class, id);
+            if (d == null) {
+                throw new IllegalArgumentException("Dobavljač nije pronađen!");
+            }
+            d.setNaziv(naziv.trim());
+            d.setAdresa(adresa.trim());
+            d.setTelefon(telefon.trim());
+            d.setEmail(email.trim());
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    public void obrisiDobavljaca(int id) {
+        if (nadjiDobavljaca(id) == null) {
+            throw new IllegalArgumentException("Dobavljač nije pronađen!");
+        }
+        if (broj("SELECT COUNT(a) FROM Artikal a WHERE a.dobavljacId = :id", "id", id) > 0) {
+            throw new IllegalArgumentException("Postoje artikli vezani za ovog dobavljača - brisanje nije moguće!");
+        }
+        if (broj("SELECT COUNT(n) FROM Nabavka n WHERE n.dobavljacId = :id", "id", id) > 0) {
+            throw new IllegalArgumentException("Postoje evidentirane nabavke od ovog dobavljača - brisanje nije moguće!");
+        }
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Dobavljac d = em.find(Dobavljac.class, id);
+            if (d != null) {
+                em.remove(d);
+            }
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
 
 }
