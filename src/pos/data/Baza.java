@@ -771,4 +771,95 @@ public class Baza {
         }
     }
 
+    public List<Nabavka> getNabavke() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT n FROM Nabavka n ORDER BY n.datum, n.id", Nabavka.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Nabavka evidentirajNabavku(int dobavljacId, LocalDate datum, List<StavkaNabavke> stavke) {
+        if (nadjiDobavljaca(dobavljacId) == null) {
+            throw new IllegalArgumentException("Dobavljač nije pronađen!");
+        }
+        if (stavke.isEmpty()) {
+            throw new IllegalArgumentException("Nabavka mora imati barem jednu stavku!");
+        }
+        for (StavkaNabavke s : stavke) {
+            if (nadjiArtikal(s.getSifraArtikla()) == null) {
+                throw new IllegalArgumentException("Artikal " + s.getSifraArtikla() + " nije pronađen!");
+            }
+        }
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Nabavka n = new Nabavka(0, datum, dobavljacId, new ArrayList<>(stavke));
+            for (StavkaNabavke s : n.getStavke()) {
+                s.setNabavka(n);
+            }
+            em.persist(n);
+            for (StavkaNabavke s : n.getStavke()) {
+                Artikal a = em.find(Artikal.class, s.getSifraArtikla());
+                a.setStanje(a.getStanje() + s.getKolicina());
+            }
+            transakcija.commit();
+            return n;
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    public List<Otpis> getOtpisi() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT o FROM Otpis o ORDER BY o.datum, o.id", Otpis.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Otpis evidentirajOtpis(String sifraArtikla, int kolicina, String razlog, LocalDate datum) {
+        Artikal a = nadjiArtikal(sifraArtikla);
+        if (a == null) {
+            throw new IllegalArgumentException("Artikal nije pronađen!");
+        }
+        if (kolicina <= 0) {
+            throw new IllegalArgumentException("Količina otpisa mora biti veća od 0!");
+        }
+        if (kolicina > a.getStanje()) {
+            throw new IllegalArgumentException("Količina otpisa (" + kolicina + ") je veća od stanja (" + a.getStanje() + ")!");
+        }
+        if (razlog.trim().isEmpty()) {
+            throw new IllegalArgumentException("Razlog otpisa ne smije biti prazan!");
+        }
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Artikal upravljani = em.find(Artikal.class, sifraArtikla);
+            upravljani.setStanje(upravljani.getStanje() - kolicina);
+            Otpis o = new Otpis(0, datum, sifraArtikla, a.getNaziv(), kolicina, razlog.trim());
+            em.persist(o);
+            transakcija.commit();
+            return o;
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
 }
