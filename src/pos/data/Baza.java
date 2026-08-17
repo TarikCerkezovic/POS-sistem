@@ -1062,4 +1062,122 @@ public class Baza {
         }
         racunUlaz.setStorniran(true);
     }
+
+    public List<Racun> racuniURasponu(LocalDate od, LocalDate doD) {
+        LocalDateTime pocetak = od.atStartOfDay();
+        LocalDateTime kraj = doD.plusDays(1).atStartOfDay();
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("""
+                    SELECT r FROM Racun r
+                    WHERE r.vrijeme >= :pocetak AND r.vrijeme < :kraj
+                    ORDER BY r.vrijeme""", Racun.class)
+                    .setParameter("pocetak", pocetak)
+                    .setParameter("kraj", kraj)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public List<Povrat> povratiURasponu(LocalDate od, LocalDate doD) {
+        LocalDateTime pocetak = od.atStartOfDay();
+        LocalDateTime kraj = doD.plusDays(1).atStartOfDay();
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("""
+                    SELECT p FROM Povrat p
+                    WHERE p.vrijeme >= :pocetak AND p.vrijeme < :kraj
+                    ORDER BY p.vrijeme""", Povrat.class)
+                    .setParameter("pocetak", pocetak)
+                    .setParameter("kraj", kraj)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public double promet(LocalDate od, LocalDate doD) {
+        double suma = 0;
+        for (Racun r : racuniURasponu(od, doD)) {
+            if (!r.isStorniran()) {
+                suma = suma + r.ukupno();
+            }
+        }
+        for (Povrat p : povratiURasponu(od, doD)) {
+            suma = suma - p.getIznos();
+        }
+        return Util.round2(suma);
+    }
+
+    public static LocalDate pocetakSedmice(LocalDate datum) {
+        return datum.with(DayOfWeek.MONDAY);
+    }
+
+    public Map<String, double[]> prometPoProdavacima(LocalDate od, LocalDate doD) {
+        Map<String, double[]> mapa = new LinkedHashMap<>();
+        for (Racun r : racuniURasponu(od, doD)) {
+            if (r.isStorniran()) {
+                continue;
+            }
+            double[] vrijednosti = mapa.get(r.getProdavac());
+            if (vrijednosti == null) {
+                vrijednosti = new double[2];
+                mapa.put(r.getProdavac(), vrijednosti);
+            }
+            vrijednosti[0] = vrijednosti[0] + 1;
+            vrijednosti[1] = vrijednosti[1] + r.ukupno();
+        }
+        for (Povrat p : povratiURasponu(od, doD)) {
+            double[] vrijednosti = mapa.get(p.getProdavac());
+            if (vrijednosti == null) {
+                vrijednosti = new double[2];
+                mapa.put(p.getProdavac(), vrijednosti);
+            }
+            vrijednosti[1] = vrijednosti[1] - p.getIznos();
+        }
+        for (double[] vrijednosti : mapa.values()) {
+            vrijednosti[1] = Util.round2(vrijednosti[1]);
+        }
+        return mapa;
+    }
+
+    public List<Object[]> najprodavaniji(LocalDate od, LocalDate doD) {
+        Map<String, Object[]> mapa = new LinkedHashMap<>();
+        for (Racun r : racuniURasponu(od, doD)) {
+            if (r.isStorniran()) {
+                continue;
+            }
+            for (StavkaRacuna s : r.getStavke()) {
+                Object[] podaci = mapa.get(s.getSifraArtikla());
+                if (podaci == null) {
+                    podaci = new Object[]{s.getSifraArtikla(), s.getNazivArtikla(), 0, 0.0};
+                    mapa.put(s.getSifraArtikla(), podaci);
+                }
+                podaci[2] = (Integer) podaci[2] + s.getKolicina();
+                podaci[3] = (Double) podaci[3] + s.iznos();
+            }
+        }
+        for (Povrat p : povratiURasponu(od, doD)) {
+            Object[] podaci = mapa.get(p.getSifraArtikla());
+            if (podaci != null) {
+                podaci[2] = (Integer) podaci[2] - p.getKolicina();
+                podaci[3] = (Double) podaci[3] - p.getIznos();
+            }
+        }
+        List<Object[]> rezultat = new ArrayList<>(mapa.values());
+        for (Object[] podaci : rezultat) {
+            podaci[3] = Util.round2((Double) podaci[3]);
+        }
+        Collections.sort(rezultat, new Comparator<Object[]>() {
+            @Override
+            public int compare(Object[] prvi, Object[] drugi) {
+                int kolicinaPrvog = (Integer) prvi[2];
+                int kolicinaDrugog = (Integer) drugi[2];
+                return kolicinaDrugog - kolicinaPrvog;
+            }
+        });
+        return rezultat;
+    }
+    
 }
