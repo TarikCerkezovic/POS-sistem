@@ -862,4 +862,204 @@ public class Baza {
         }
     }
 
+    public List<Racun> getRacuni() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT r FROM Racun r ORDER BY r.vrijeme", Racun.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Racun nadjiRacun(String broj) {
+        EntityManager em = JPA.em();
+        try {
+            return em.find(Racun.class, broj);
+        } finally {
+            em.close();
+        }
+    }
+
+    public Racun izdajRacun(Korisnik prodavac, List<StavkaRacuna> stavke,
+                            String nacinPlacanja, double predato, LocalDateTime vrijeme) {
+        if (stavke.isEmpty()) {
+            throw new IllegalArgumentException("Korpa je prazna!");
+        }
+        for (StavkaRacuna s : stavke) {
+            Artikal a = nadjiArtikal(s.getSifraArtikla());
+            if (a == null) {
+                throw new IllegalArgumentException("Artikal " + s.getSifraArtikla() + " nije pronađen!");
+            }
+            if (s.getKolicina() > a.getStanje()) {
+                throw new IllegalArgumentException("Nema dovoljno na stanju: " + a.getNaziv()
+                        + " (traženo: " + s.getKolicina() + ", stanje: " + a.getStanje() + ")");
+            }
+        }
+        double ukupno = 0;
+        for (StavkaRacuna s : stavke) {
+            ukupno = ukupno + s.iznos();
+        }
+        ukupno = Util.round2(ukupno);
+
+        double predatoKupca = 0;
+        double povratNovca = 0;
+        if ("GOTOVINA".equals(nacinPlacanja)) {
+            if (predato + 1e-9 < ukupno) {
+                throw new IllegalArgumentException("Predati iznos (" + Util.km(predato)
+                        + " KM) je manji od ukupnog iznosa računa (" + Util.km(ukupno) + " KM)!");
+            }
+            predatoKupca = Util.round2(predato);
+            povratNovca = Util.round2(predato - ukupno);
+        }
+
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Brojac brojac = em.find(Brojac.class, "racun");
+            brojac.setVrijednost(brojac.getVrijednost() + 1);
+            String brojRacuna = vrijeme.getYear() + "-" + String.format("%06d", brojac.getVrijednost());
+
+            Racun r = new Racun(brojRacuna, vrijeme, prodavac.getIme(), new ArrayList<>(stavke),
+                    nacinPlacanja, predatoKupca, povratNovca);
+            for (StavkaRacuna s : r.getStavke()) {
+                s.setRacun(r);
+            }
+            em.persist(r);
+
+            for (StavkaRacuna s : r.getStavke()) {
+                Artikal a = em.find(Artikal.class, s.getSifraArtikla());
+                a.setStanje(a.getStanje() - s.getKolicina());
+            }
+            transakcija.commit();
+            return r;
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    public List<Povrat> getPovrati() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT p FROM Povrat p ORDER BY p.vrijeme, p.id", Povrat.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public int vracenaKolicina(String brojRacuna, String sifraArtikla) {
+        EntityManager em = JPA.em();
+        try {
+            return vracenaKolicina(em, brojRacuna, sifraArtikla);
+        } finally {
+            em.close();
+        }
+    }
+
+    private int vracenaKolicina(EntityManager em, String brojRacuna, String sifraArtikla) {
+        Long suma = em.createQuery("""
+                SELECT SUM(p.kolicina) FROM Povrat p
+                WHERE p.brojRacuna = :broj AND p.sifraArtikla = :sifra""", Long.class)
+                .setParameter("broj", brojRacuna)
+                .setParameter("sifra", sifraArtikla)
+                .getSingleResult();
+        if (suma == null) {
+            return 0;
+        }
+        return suma.intValue();
+    }
+
+    public Povrat evidentirajPovrat(Racun racunUlaz, String sifraArtikla, int kolicina, LocalDateTime vrijeme) {
+        if (racunUlaz == null) {
+            throw new IllegalArgumentException("Račun nije pronađen!");
+        }
+        Racun racun = nadjiRacun(racunUlaz.getBroj());
+        if (racun == null) {
+            throw new IllegalArgumentException("Račun nije pronađen!");
+        }
+        if (racun.isStorniran()) {
+            throw new IllegalArgumentException("Račun je storniran - povrat nije moguć!");
+        }
+        StavkaRacuna stavka = null;
+        for (StavkaRacuna s : racun.getStavke()) {
+            if (s.getSifraArtikla().equals(sifraArtikla)) {
+                stavka = s;
+                break;
+            }
+        }
+        if (stavka == null) {
+            throw new IllegalArgumentException("Artikal se ne nalazi na ovom računu!");
+        }
+        int preostalo = stavka.getKolicina() - vracenaKolicina(racun.getBroj(), sifraArtikla);
+        if (kolicina <= 0) {
+            throw new IllegalArgumentException("Količina povrata mora biti veća od 0!");
+        }
+        if (kolicina > preostalo) {
+            throw new IllegalArgumentException("Moguće je vratiti najviše " + preostalo + " kom ovog artikla!");
+        }
+        double iznos = Util.round2(kolicina * stavka.cijenaSaPopustom());
+
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Artikal a = em.find(Artikal.class, sifraArtikla);
+            a.setStanje(a.getStanje() + kolicina);
+            Povrat p = new Povrat(0, racun.getBroj(), sifraArtikla, stavka.getNazivArtikla(),
+                    kolicina, iznos, vrijeme, racun.getProdavac());
+            em.persist(p);
+            transakcija.commit();
+            return p;
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+
+    public void stornirajRacun(Racun racunUlaz) {
+        if (racunUlaz == null) {
+            throw new IllegalArgumentException("Račun nije pronađen!");
+        }
+        Racun provjera = nadjiRacun(racunUlaz.getBroj());
+        if (provjera == null) {
+            throw new IllegalArgumentException("Račun nije pronađen!");
+        }
+        if (provjera.isStorniran()) {
+            throw new IllegalArgumentException("Račun je već storniran!");
+        }
+        EntityManager em = JPA.em();
+        EntityTransaction transakcija = em.getTransaction();
+        try {
+            transakcija.begin();
+            Racun racun = em.find(Racun.class, racunUlaz.getBroj());
+            for (StavkaRacuna s : racun.getStavke()) {
+                int preostalo = s.getKolicina() - vracenaKolicina(em, racun.getBroj(), s.getSifraArtikla());
+                if (preostalo > 0) {
+                    Artikal a = em.find(Artikal.class, s.getSifraArtikla());
+                    a.setStanje(a.getStanje() + preostalo);
+                }
+            }
+            racun.setStorniran(true);
+            transakcija.commit();
+        } catch (RuntimeException e) {
+            if (transakcija.isActive()) {
+                transakcija.rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+        racunUlaz.setStorniran(true);
+    }
 }
