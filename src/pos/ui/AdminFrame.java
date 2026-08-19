@@ -40,6 +40,23 @@ public class AdminFrame extends JFrame {
     private final JTextField tfDobTelefon = new JTextField(10);
     private final JTextField tfDobEmail = new JTextField(14);
 
+    private final JComboBox<Dobavljac> cbNabDobavljac = new JComboBox<>();
+    private final JTextField tfNabDatum = new JTextField(8);
+    private final JComboBox<Artikal> cbNabArtikal = new JComboBox<>();
+    private final JTextField tfNabKolicina = new JTextField(5);
+    private final JTextField tfNabCijena = new JTextField(6);
+    private final List<StavkaNabavke> stavkeNabavke = new ArrayList<>();
+    private final DefaultTableModel mStavkeNabavke = UiUtil.model("Šifra", "Artikal", "Količina", "Nab. cijena", "Iznos");
+    private final JTable tStavkeNabavke = new JTable(mStavkeNabavke);
+    private final DefaultTableModel mNabavke = UiUtil.model("ID", "Datum", "Dobavljač", "Broj stavki", "Ukupno (KM)");
+    private final JTable tNabavke = new JTable(mNabavke);
+
+    private final JComboBox<Artikal> cbOtpisArtikal = new JComboBox<>();
+    private final JTextField tfOtpisKolicina = new JTextField(5);
+    private final JTextField tfOtpisRazlog = new JTextField(20);
+    private final DefaultTableModel mOtpisi = UiUtil.model("ID", "Datum", "Šifra", "Artikal", "Količina", "Razlog");
+    private final JTable tOtpisi = new JTable(mOtpisi);
+
     public AdminFrame(Korisnik korisnik) {
         super("POS sistem - Administrator");
         this.korisnik = korisnik;
@@ -49,6 +66,8 @@ public class AdminFrame extends JFrame {
         tabovi.addTab("Artikli", tabArtikli());
         tabovi.addTab("Kategorije", tabKategorije());
         tabovi.addTab("Dobavljači", tabDobavljaci());
+        tabovi.addTab("Nabavka robe", tabNabavka());
+        tabovi.addTab("Otpis robe", tabOtpis());
 
         setLayout(new BorderLayout());
         add(UiUtil.zaglavlje("POS sistem - Administracija", korisnik, this), BorderLayout.NORTH);
@@ -385,6 +404,136 @@ public class AdminFrame extends JFrame {
         return panel;
     }
 
+    private JPanel tabNabavka() {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        JPanel nova = new JPanel(new BorderLayout(5, 5));
+        nova.setBorder(BorderFactory.createTitledBorder("Nova nabavka (evidentiranjem se stanje artikala povećava)"));
+
+        JPanel vrh = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        vrh.add(new JLabel("Dobavljač:"));
+        vrh.add(cbNabDobavljac);
+        vrh.add(new JLabel("Datum (dd.MM.gggg):"));
+        tfNabDatum.setText(LocalDate.now().format(Util.DATUM));
+        vrh.add(tfNabDatum);
+        nova.add(vrh, BorderLayout.NORTH);
+
+        JPanel stavkaPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        stavkaPanel.add(new JLabel("Artikal:"));
+        stavkaPanel.add(cbNabArtikal);
+        stavkaPanel.add(new JLabel("Količina:"));
+        stavkaPanel.add(tfNabKolicina);
+        stavkaPanel.add(new JLabel("Nabavna cijena (KM):"));
+        stavkaPanel.add(tfNabCijena);
+        JButton btnDodajStavku = new JButton("Dodaj stavku");
+        JButton btnUkloniStavku = new JButton("Ukloni stavku");
+        JButton btnEvidentiraj = new JButton("Evidentiraj nabavku");
+        stavkaPanel.add(btnDodajStavku);
+        stavkaPanel.add(btnUkloniStavku);
+        stavkaPanel.add(btnEvidentiraj);
+
+        JPanel sredina = new JPanel(new BorderLayout(5, 5));
+        sredina.add(stavkaPanel, BorderLayout.NORTH);
+        sredina.add(new JScrollPane(tStavkeNabavke), BorderLayout.CENTER);
+        nova.add(sredina, BorderLayout.CENTER);
+
+        JPanel historija = new JPanel(new BorderLayout(5, 5));
+        historija.setBorder(BorderFactory.createTitledBorder("Evidentirane nabavke"));
+        historija.add(new JScrollPane(tNabavke), BorderLayout.CENTER);
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, nova, historija);
+        split.setResizeWeight(0.55);
+        panel.add(split, BorderLayout.CENTER);
+
+        btnDodajStavku.addActionListener(e -> {
+            try {
+                Artikal a = (Artikal) cbNabArtikal.getSelectedItem();
+                if (a == null) {
+                    throw new IllegalArgumentException("Odaberite artikal!");
+                }
+                int kol = Util.parseCijeliBroj(tfNabKolicina.getText(), "Količina");
+                if (kol <= 0) {
+                    throw new IllegalArgumentException("Količina mora biti veća od 0!");
+                }
+                double cijena = Util.parseBroj(tfNabCijena.getText(), "Nabavna cijena");
+                if (cijena <= 0) {
+                    throw new IllegalArgumentException("Nabavna cijena mora biti veća od 0!");
+                }
+                stavkeNabavke.add(new StavkaNabavke(a.getSifra(), a.getNaziv(), kol, Util.round2(cijena)));
+                osvjeziStavkeNabavke();
+                tfNabKolicina.setText("");
+                tfNabCijena.setText("");
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+
+        btnUkloniStavku.addActionListener(e -> {
+            int red = tStavkeNabavke.getSelectedRow();
+            if (red < 0) {
+                UiUtil.greska(this, "Odaberite stavku za uklanjanje!");
+                return;
+            }
+            stavkeNabavke.remove(red);
+            osvjeziStavkeNabavke();
+        });
+
+        btnEvidentiraj.addActionListener(e -> {
+            try {
+                Dobavljac d = (Dobavljac) cbNabDobavljac.getSelectedItem();
+                if (d == null) {
+                    throw new IllegalArgumentException("Odaberite dobavljača!");
+                }
+                LocalDate datum = Util.parseDatum(tfNabDatum.getText());
+                baza.evidentirajNabavku(d.getId(), datum, stavkeNabavke);
+                stavkeNabavke.clear();
+                osvjeziSve();
+                UiUtil.info(this, "Nabavka je evidentirana. Stanje artikala je povećano.");
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+
+        return panel;
+    }
+
+    private JPanel tabOtpis() {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        JPanel forma = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        forma.setBorder(BorderFactory.createTitledBorder("Novi otpis (smanjuje stanje artikla)"));
+        forma.add(new JLabel("Artikal:"));
+        forma.add(cbOtpisArtikal);
+        forma.add(new JLabel("Količina:"));
+        forma.add(tfOtpisKolicina);
+        forma.add(new JLabel("Razlog:"));
+        forma.add(tfOtpisRazlog);
+        JButton btnOtpisi = new JButton("Evidentiraj otpis");
+        forma.add(btnOtpisi);
+
+        panel.add(forma, BorderLayout.NORTH);
+        panel.add(new JScrollPane(tOtpisi), BorderLayout.CENTER);
+
+        btnOtpisi.addActionListener(e -> {
+            try {
+                Artikal a = (Artikal) cbOtpisArtikal.getSelectedItem();
+                if (a == null) {
+                    throw new IllegalArgumentException("Odaberite artikal!");
+                }
+                int kol = Util.parseCijeliBroj(tfOtpisKolicina.getText(), "Količina");
+                baza.evidentirajOtpis(a.getSifra(), kol, tfOtpisRazlog.getText(), LocalDate.now());
+                osvjeziSve();
+                tfOtpisKolicina.setText("");
+                tfOtpisRazlog.setText("");
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+        return panel;
+    }
+
     private ListCellRenderer<Object> katRenderer() {
         return new DefaultListCellRenderer() {
             @Override
@@ -414,6 +563,14 @@ public class AdminFrame extends JFrame {
                 combo.setSelectedIndex(i);
                 return;
             }
+        }
+    }
+
+    private void osvjeziStavkeNabavke() {
+        mStavkeNabavke.setRowCount(0);
+        for (StavkaNabavke s : stavkeNabavke) {
+            mStavkeNabavke.addRow(new Object[]{s.getSifraArtikla(), s.getNazivArtikla(),
+                    s.getKolicina(), Util.km(s.getNabavnaCijena()), Util.km(s.iznos())});
         }
     }
 
@@ -449,6 +606,26 @@ public class AdminFrame extends JFrame {
             mDobavljaci.addRow(new Object[]{d.getId(), d.getNaziv(), d.getAdresa(), d.getTelefon(), d.getEmail()});
         }
 
+        mNabavke.setRowCount(0);
+        for (Nabavka n : baza.getNabavke()) {
+            Dobavljac d = baza.nadjiDobavljaca(n.getDobavljacId());
+            String nazivDobavljaca;
+            if (d != null) {
+                nazivDobavljaca = d.getNaziv();
+            } else {
+                nazivDobavljaca = "?";
+            }
+            mNabavke.addRow(new Object[]{n.getId(), n.getDatum().format(Util.DATUM),
+                    nazivDobavljaca, n.getStavke().size(), Util.km(n.ukupno())});
+        }
+        osvjeziStavkeNabavke();
+
+        mOtpisi.setRowCount(0);
+        for (Otpis o : baza.getOtpisi()) {
+            mOtpisi.addRow(new Object[]{o.getId(), o.getDatum().format(Util.DATUM), o.getSifraArtikla(),
+                    o.getNazivArtikla(), o.getKolicina(), o.getRazlog()});
+        }
+
         cbKategorija.removeAllItems();
         for (Kategorija k : baza.getKategorije()) {
             cbKategorija.addItem(k);
@@ -463,8 +640,17 @@ public class AdminFrame extends JFrame {
         }
 
         cbDobavljac.removeAllItems();
+        cbNabDobavljac.removeAllItems();
         for (Dobavljac d : baza.getDobavljaci()) {
             cbDobavljac.addItem(d);
+            cbNabDobavljac.addItem(d);
+        }
+
+        cbNabArtikal.removeAllItems();
+        cbOtpisArtikal.removeAllItems();
+        for (Artikal a : baza.getArtikli()) {
+            cbNabArtikal.addItem(a);
+            cbOtpisArtikal.addItem(a);
         }
     }
 }
