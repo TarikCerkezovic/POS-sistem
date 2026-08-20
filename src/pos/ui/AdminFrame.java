@@ -57,6 +57,20 @@ public class AdminFrame extends JFrame {
     private final DefaultTableModel mOtpisi = UiUtil.model("ID", "Datum", "Šifra", "Artikal", "Količina", "Razlog");
     private final JTable tOtpisi = new JTable(mOtpisi);
 
+    private final JComboBox<Artikal> cbAkcijaArtikal = new JComboBox<>();
+    private final JTextField tfAkcijaOd = new JTextField(8);
+    private final JTextField tfAkcijaDo = new JTextField(8);
+    private final JTextField tfAkcijaPopust = new JTextField(5);
+    private final DefaultTableModel mAkcije = UiUtil.model("ID", "Šifra", "Artikal", "Od", "Do", "Popust (%)", "Status");
+    private final JTable tAkcije = new JTable(mAkcije);
+
+    private final DefaultTableModel mKorisnici = UiUtil.model("ID", "Ime i prezime", "Korisničko ime", "Uloga");
+    private final JTable tKorisnici = new JTable(mKorisnici);
+    private final JTextField tfKorIme = new JTextField(14);
+    private final JTextField tfKorLogin = new JTextField(10);
+    private final JPasswordField tfKorLozinka = new JPasswordField(10);
+    private final JComboBox<Uloga> cbUloga = new JComboBox<>(Uloga.values());
+
     public AdminFrame(Korisnik korisnik) {
         super("POS sistem - Administrator");
         this.korisnik = korisnik;
@@ -68,6 +82,8 @@ public class AdminFrame extends JFrame {
         tabovi.addTab("Dobavljači", tabDobavljaci());
         tabovi.addTab("Nabavka robe", tabNabavka());
         tabovi.addTab("Otpis robe", tabOtpis());
+        tabovi.addTab("Akcije i popusti", tabAkcije());
+        tabovi.addTab("Korisnici", tabKorisnici());
 
         setLayout(new BorderLayout());
         add(UiUtil.zaglavlje("POS sistem - Administracija", korisnik, this), BorderLayout.NORTH);
@@ -534,6 +550,157 @@ public class AdminFrame extends JFrame {
         return panel;
     }
 
+    private JPanel tabAkcije() {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        JPanel forma = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        forma.setBorder(BorderFactory.createTitledBorder("Nova akcija (trajanje + popust koji se obračunava pri prodaji)"));
+        forma.add(new JLabel("Artikal:"));
+        forma.add(cbAkcijaArtikal);
+        forma.add(new JLabel("Od (dd.MM.gggg):"));
+        forma.add(tfAkcijaOd);
+        forma.add(new JLabel("Do (dd.MM.gggg):"));
+        forma.add(tfAkcijaDo);
+        forma.add(new JLabel("Popust (%):"));
+        forma.add(tfAkcijaPopust);
+        JButton btnDodaj = new JButton("Dodaj akciju");
+        JButton btnObrisi = new JButton("Obriši akciju");
+        forma.add(btnDodaj);
+        forma.add(btnObrisi);
+
+        panel.add(forma, BorderLayout.NORTH);
+        panel.add(new JScrollPane(tAkcije), BorderLayout.CENTER);
+
+        btnDodaj.addActionListener(e -> {
+            try {
+                Artikal a = (Artikal) cbAkcijaArtikal.getSelectedItem();
+                if (a == null) {
+                    throw new IllegalArgumentException("Odaberite artikal!");
+                }
+                LocalDate od = Util.parseDatum(tfAkcijaOd.getText());
+                LocalDate doD = Util.parseDatum(tfAkcijaDo.getText());
+                double popust = Util.parseBroj(tfAkcijaPopust.getText(), "Popust");
+                baza.dodajAkciju(a.getSifra(), od, doD, popust);
+                osvjeziSve();
+                tfAkcijaPopust.setText("");
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+
+        btnObrisi.addActionListener(e -> {
+            try {
+                int red = tAkcije.getSelectedRow();
+                if (red < 0) {
+                    throw new IllegalArgumentException("Odaberite akciju u tabeli!");
+                }
+                int id = (Integer) mAkcije.getValueAt(red, 0);
+                if (!UiUtil.potvrda(this, "Obrisati odabranu akciju?")) {
+                    return;
+                }
+                baza.obrisiAkciju(id);
+                osvjeziSve();
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+        return panel;
+    }
+
+    private JPanel tabKorisnici() {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        panel.add(new JScrollPane(tKorisnici), BorderLayout.CENTER);
+
+        JPanel forma = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        forma.setBorder(BorderFactory.createTitledBorder("Podaci o korisniku"));
+        forma.add(new JLabel("Ime i prezime:"));
+        forma.add(tfKorIme);
+        forma.add(new JLabel("Korisničko ime:"));
+        forma.add(tfKorLogin);
+        forma.add(new JLabel("Šifra:"));
+        forma.add(tfKorLozinka);
+        forma.add(new JLabel("Uloga:"));
+        forma.add(cbUloga);
+        JButton btnDodaj = new JButton("Dodaj");
+        JButton btnIzmijeni = new JButton("Izmijeni");
+        JButton btnObrisi = new JButton("Obriši");
+        forma.add(btnDodaj);
+        forma.add(btnIzmijeni);
+        forma.add(btnObrisi);
+        panel.add(forma, BorderLayout.SOUTH);
+
+        tKorisnici.getSelectionModel().addListSelectionListener(e -> {
+            int red = tKorisnici.getSelectedRow();
+            if (e.getValueIsAdjusting() || red < 0) {
+                return;
+            }
+            Korisnik k = baza.nadjiKorisnika((Integer) mKorisnici.getValueAt(red, 0));
+            if (k == null) {
+                return;
+            }
+            tfKorIme.setText(k.getIme());
+            tfKorLogin.setText(k.getKorisnickoIme());
+            tfKorLozinka.setText(k.getLozinka());
+            cbUloga.setSelectedItem(k.getUloga());
+        });
+
+        btnDodaj.addActionListener(e -> {
+            try {
+                baza.dodajKorisnika(tfKorIme.getText(), tfKorLogin.getText(),
+                        new String(tfKorLozinka.getPassword()), (Uloga) cbUloga.getSelectedItem());
+                osvjeziSve();
+                ocistiFormuKorisnika();
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+
+        btnIzmijeni.addActionListener(e -> {
+            try {
+                int red = tKorisnici.getSelectedRow();
+                if (red < 0) {
+                    throw new IllegalArgumentException("Odaberite korisnika u tabeli!");
+                }
+                int id = (Integer) mKorisnici.getValueAt(red, 0);
+                baza.izmijeniKorisnika(id, tfKorIme.getText(), tfKorLogin.getText(),
+                        new String(tfKorLozinka.getPassword()), (Uloga) cbUloga.getSelectedItem());
+                osvjeziSve();
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+
+        btnObrisi.addActionListener(e -> {
+            try {
+                int red = tKorisnici.getSelectedRow();
+                if (red < 0) {
+                    throw new IllegalArgumentException("Odaberite korisnika u tabeli!");
+                }
+                int id = (Integer) mKorisnici.getValueAt(red, 0);
+                if (id == korisnik.getId()) {
+                    throw new IllegalArgumentException("Ne možete obrisati vlastiti nalog!");
+                }
+                if (!UiUtil.potvrda(this, "Obrisati odabranog korisnika?")) {
+                    return;
+                }
+                baza.obrisiKorisnika(id);
+                osvjeziSve();
+                ocistiFormuKorisnika();
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        });
+        return panel;
+    }
+
+    private void ocistiFormuKorisnika() {
+        tfKorIme.setText("");
+        tfKorLogin.setText("");
+        tfKorLozinka.setText("");
+    }
+
     private ListCellRenderer<Object> katRenderer() {
         return new DefaultListCellRenderer() {
             @Override
@@ -626,6 +793,27 @@ public class AdminFrame extends JFrame {
                     o.getNazivArtikla(), o.getKolicina(), o.getRazlog()});
         }
 
+        mAkcije.setRowCount(0);
+        LocalDate danas = LocalDate.now();
+        for (Akcija a : baza.getAkcije()) {
+            String status;
+            if (a.aktivnaNa(danas)) {
+                status = "AKTIVNA";
+            } else if (danas.isBefore(a.getOdDatuma())) {
+                status = "Najavljena";
+            } else {
+                status = "Istekla";
+            }
+            mAkcije.addRow(new Object[]{a.getId(), a.getSifraArtikla(), a.getNazivArtikla(),
+                    a.getOdDatuma().format(Util.DATUM), a.getDoDatuma().format(Util.DATUM),
+                    a.getPopustProcenat(), status});
+        }
+
+        mKorisnici.setRowCount(0);
+        for (Korisnik k : baza.getKorisnici()) {
+            mKorisnici.addRow(new Object[]{k.getId(), k.getIme(), k.getKorisnickoIme(), k.getUloga()});
+        }
+
         cbKategorija.removeAllItems();
         for (Kategorija k : baza.getKategorije()) {
             cbKategorija.addItem(k);
@@ -648,9 +836,11 @@ public class AdminFrame extends JFrame {
 
         cbNabArtikal.removeAllItems();
         cbOtpisArtikal.removeAllItems();
+        cbAkcijaArtikal.removeAllItems();
         for (Artikal a : baza.getArtikli()) {
             cbNabArtikal.addItem(a);
             cbOtpisArtikal.addItem(a);
+            cbAkcijaArtikal.addItem(a);
         }
     }
 }
