@@ -2,6 +2,7 @@ package pos.ui;
 
 import pos.data.Baza;
 import pos.model.*;
+import pos.util.PdfRacun;
 import pos.util.Util;
 
 import javax.swing.*;
@@ -11,6 +12,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -334,6 +336,13 @@ public class ProdavacFrame extends JFrame {
             }
             Racun r = baza.izdajRacun(korisnik, korpa, nacin, predato, LocalDateTime.now());
 
+            String porukaPdf;
+            try {
+                File pdf = PdfRacun.stampaj(r);
+                porukaPdf = "PDF račun: " + pdf.getAbsolutePath();
+            } catch (Exception ex) {
+                porukaPdf = "Greška pri štampanju PDF-a: " + ex.getMessage();
+            }
 
             StringBuilder sb = new StringBuilder();
             sb.append("Račun broj: ").append(r.getBroj()).append("\n");
@@ -342,6 +351,7 @@ public class ProdavacFrame extends JFrame {
                 sb.append("Predato: ").append(Util.km(r.getPredato())).append(" KM\n");
                 sb.append("Povrat: ").append(Util.km(r.getPovratNovca())).append(" KM\n");
             }
+            sb.append("\n").append(porukaPdf);
             UiUtil.info(this, sb.toString());
 
             korpa.clear();
