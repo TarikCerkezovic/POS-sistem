@@ -54,6 +54,14 @@ public class ProdavacFrame extends JFrame {
         setLayout(new BorderLayout());
 
         JPanel zaglavlje = UiUtil.zaglavlje("Prodaja i izdavanje računa", korisnik, this);
+        JPanel dodatno = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        JButton btnPovrat = new JButton("Povrat robe");
+        JButton btnStorno = new JButton("Storno računa");
+        btnPovrat.addActionListener(e -> povratRobeDijalog());
+        btnStorno.addActionListener(e -> stornoRacuna());
+        dodatno.add(btnPovrat);
+        dodatno.add(btnStorno);
+        zaglavlje.add(dodatno, BorderLayout.CENTER);
         add(zaglavlje, BorderLayout.NORTH);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
@@ -357,6 +365,127 @@ public class ProdavacFrame extends JFrame {
             korpa.clear();
             tfPredato.setText("");
             osvjeziKorpu();
+            osvjeziArtikle();
+        } catch (IllegalArgumentException ex) {
+            UiUtil.greska(this, ex.getMessage());
+        }
+    }
+
+    private void povratRobeDijalog() {
+        PovratDijalog dijalog = new PovratDijalog();
+        dijalog.setVisible(true);
+    }
+
+    private class PovratDijalog extends JDialog {
+
+        private final JTextField tfBroj = new JTextField(12);
+        private final JTextField tfKol = new JTextField("1", 4);
+        private final DefaultTableModel modelStavke =
+                UiUtil.model("Šifra", "Naziv", "Kupljeno", "Vraćeno", "Preostalo", "Cijena sa pop.");
+        private final JTable tabelaStavke = new JTable(modelStavke);
+        private Racun ucitaniRacun = null;
+
+        PovratDijalog() {
+            super(ProdavacFrame.this, "Povrat robe", true);
+            setSize(640, 420);
+            setLocationRelativeTo(ProdavacFrame.this);
+            setLayout(new BorderLayout(6, 6));
+
+            JPanel gore = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+            JButton btnUcitaj = new JButton("Učitaj račun");
+            gore.add(new JLabel("Broj računa:"));
+            gore.add(tfBroj);
+            gore.add(btnUcitaj);
+            add(gore, BorderLayout.NORTH);
+
+            add(new JScrollPane(tabelaStavke), BorderLayout.CENTER);
+
+            JPanel dolje = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+            JButton btnPovrat = new JButton("Evidentiraj povrat");
+            dolje.add(new JLabel("Količina za povrat:"));
+            dolje.add(tfKol);
+            dolje.add(btnPovrat);
+            add(dolje, BorderLayout.SOUTH);
+
+            btnUcitaj.addActionListener(e -> ucitajRacun());
+            btnPovrat.addActionListener(e -> evidentirajPovrat());
+        }
+
+        private void ucitajRacun() {
+            Racun r = baza.nadjiRacun(tfBroj.getText().trim());
+            if (r == null) {
+                UiUtil.greska(this, "Račun nije pronađen!");
+                return;
+            }
+            if (r.isStorniran()) {
+                UiUtil.greska(this, "Račun je storniran - povrat nije moguć!");
+                return;
+            }
+            ucitaniRacun = r;
+            napuniTabelu();
+        }
+
+        private void napuniTabelu() {
+            modelStavke.setRowCount(0);
+            if (ucitaniRacun == null) {
+                return;
+            }
+            for (StavkaRacuna s : ucitaniRacun.getStavke()) {
+                int vraceno = baza.vracenaKolicina(ucitaniRacun.getBroj(), s.getSifraArtikla());
+                modelStavke.addRow(new Object[]{
+                        s.getSifraArtikla(), s.getNazivArtikla(), s.getKolicina(),
+                        vraceno, s.getKolicina() - vraceno, Util.km(s.cijenaSaPopustom())});
+            }
+        }
+
+        private void evidentirajPovrat() {
+            try {
+                if (ucitaniRacun == null) {
+                    UiUtil.greska(this, "Prvo učitajte račun!");
+                    return;
+                }
+                int red = tabelaStavke.getSelectedRow();
+                if (red < 0) {
+                    UiUtil.greska(this, "Odaberite stavku računa!");
+                    return;
+                }
+                String sifra = (String) modelStavke.getValueAt(red, 0);
+                int kolicina = Util.parseCijeliBroj(tfKol.getText(), "Količina za povrat");
+                Povrat p = baza.evidentirajPovrat(ucitaniRacun, sifra, kolicina, LocalDateTime.now());
+                UiUtil.info(this, "Povrat evidentiran!\nArtikal: " + p.getNazivArtikla()
+                        + "\nKoličina: " + p.getKolicina()
+                        + "\nVraćeni iznos: " + Util.km(p.getIznos()) + " KM");
+                napuniTabelu();
+                osvjeziArtikle();
+            } catch (IllegalArgumentException ex) {
+                UiUtil.greska(this, ex.getMessage());
+            }
+        }
+    }
+
+    private void stornoRacuna() {
+        String broj = JOptionPane.showInputDialog(this, "Unesite broj računa za storno:",
+                "Storno računa", JOptionPane.QUESTION_MESSAGE);
+        if (broj == null || broj.trim().isEmpty()) {
+            return;
+        }
+        try {
+            Racun r = baza.nadjiRacun(broj.trim());
+            if (r == null) {
+                UiUtil.greska(this, "Račun nije pronađen!");
+                return;
+            }
+            if (r.isStorniran()) {
+                UiUtil.greska(this, "Račun je već storniran!");
+                return;
+            }
+            boolean potvrdjeno = UiUtil.potvrda(this, "Stornirati račun " + r.getBroj()
+                    + " (iznos " + Util.km(r.ukupno()) + " KM)?\nPreostala roba se vraća na stanje.");
+            if (!potvrdjeno) {
+                return;
+            }
+            baza.stornirajRacun(r);
+            UiUtil.info(this, "Račun " + r.getBroj() + " je storniran.");
             osvjeziArtikle();
         } catch (IllegalArgumentException ex) {
             UiUtil.greska(this, ex.getMessage());
