@@ -62,8 +62,20 @@ public class PrijavaFrame extends JFrame {
             }
             Korisnik korisnik = Baza.get().prijava(login, sifra);
 
-            UiUtil.info(this, "Prijava uspješna: " + korisnik.getIme()
-                    + " (" + korisnik.getUloga() + ")");
+            JFrame glavni;
+            switch (korisnik.getUloga()) {
+                case ADMINISTRATOR:
+                    glavni = new AdminFrame(korisnik);
+                    break;
+                case PRODAVAC:
+                    glavni = new ProdavacFrame(korisnik);
+                    break;
+                default:
+                    glavni = new MenadzerFrame(korisnik);
+                    break;
+            }
+            glavni.setVisible(true);
+            dispose();
         } catch (IllegalArgumentException ex) {
             UiUtil.greska(this, ex.getMessage());
             tfSifra.setText("");
