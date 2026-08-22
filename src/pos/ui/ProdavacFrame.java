@@ -3,6 +3,7 @@ package pos.ui;
 import pos.data.Baza;
 import pos.model.*;
 import pos.util.PdfRacun;
+import pos.util.Slike;
 import pos.util.Util;
 
 import javax.swing.*;
@@ -26,9 +27,10 @@ public class ProdavacFrame extends JFrame {
     private final List<StavkaRacuna> korpa = new ArrayList<>();
 
     private final JTextField tfPretraga = new JTextField();
+    private final JTabbedPane taboviArtikala = new JTabbedPane();
     private final DefaultTableModel modelArtikli =
             UiUtil.model("Šifra", "Naziv", "Cijena (KM)", "Stanje", "Popust");
-    private final JTable tabelaArtikli = new JTable(modelArtikli);
+    private final JTable tabelaArtikli = UiUtil.tabela(modelArtikli, "Nema artikala za prikaz");
 
     private final JTextField tfSifra = new JTextField(8);
     private final JTextField tfKolicina = new JTextField("1", 4);
@@ -55,8 +57,8 @@ public class ProdavacFrame extends JFrame {
 
         JPanel zaglavlje = UiUtil.zaglavlje("Prodaja i izdavanje računa", korisnik, this);
         JPanel dodatno = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        JButton btnPovrat = new JButton("Povrat robe");
-        JButton btnStorno = new JButton("Storno računa");
+        JButton btnPovrat = UiUtil.dugme("Povrat robe (F5)", "povrat");
+        JButton btnStorno = UiUtil.dugme("Storno računa (F8)", "storno");
         btnPovrat.addActionListener(e -> povratRobeDijalog());
         btnStorno.addActionListener(e -> stornoRacuna());
         dodatno.add(btnPovrat);
@@ -70,12 +72,16 @@ public class ProdavacFrame extends JFrame {
         split.setDividerLocation(560);
         add(split, BorderLayout.CENTER);
 
+        UiUtil.precica(getRootPane(), "F5", btnPovrat);
+        UiUtil.precica(getRootPane(), "F8", btnStorno);
+
         osvjeziArtikle();
     }
 
     private JPanel paneArtikli() {
         JPanel panel = new JPanel(new BorderLayout(6, 6));
-        panel.setBorder(BorderFactory.createTitledBorder("Artikli (dupli klik dodaje u korpu)"));
+        panel.setBorder(BorderFactory.createTitledBorder(
+                "Artikli (klik na sličicu ili dupli klik u tabeli dodaje u korpu)"));
 
         JPanel gore = new JPanel(new BorderLayout(6, 0));
         gore.add(new JLabel("Pretraga:"), BorderLayout.WEST);
@@ -94,25 +100,30 @@ public class ProdavacFrame extends JFrame {
                 if (e.getClickCount() == 2) {
                     int red = tabelaArtikli.getSelectedRow();
                     if (red >= 0) {
-                        dodajUKorpu((String) modelArtikli.getValueAt(red, 0), 1);
+                        // preko tabele a ne modela, zbog sortiranja
+                        dodajUKorpu((String) tabelaArtikli.getValueAt(red, 0), 1);
                     }
                 }
             }
         });
-        panel.add(new JScrollPane(tabelaArtikli), BorderLayout.CENTER);
+
+        panel.add(taboviArtikala, BorderLayout.CENTER);
         return panel;
     }
 
     private void osvjeziArtikle() {
         String filter = tfPretraga.getText().trim().toLowerCase();
-        modelArtikli.setRowCount(0);
         LocalDate danas = LocalDate.now();
+
+        modelArtikli.setRowCount(0);
+        List<Artikal> filtrirani = new ArrayList<>();
         for (Artikal a : baza.getArtikli()) {
             if (!filter.isEmpty()
                     && !a.getNaziv().toLowerCase().contains(filter)
                     && !a.getSifra().toLowerCase().contains(filter)) {
                 continue;
             }
+            filtrirani.add(a);
             Akcija ak = baza.aktivnaAkcija(a.getSifra(), danas);
             String popust;
             if (ak == null) {
@@ -123,6 +134,94 @@ public class ProdavacFrame extends JFrame {
             modelArtikli.addRow(new Object[]{
                     a.getSifra(), a.getNaziv(), Util.km(a.getCijena()), a.getStanje(), popust});
         }
+
+        int odabrana = taboviArtikala.getSelectedIndex();
+        taboviArtikala.removeAll();
+        taboviArtikala.addTab("Svi artikli", mrezaArtikala(filtrirani, null, danas));
+        for (Kategorija k : baza.getKategorije()) {
+            if (k.getNadkategorijaId() == null) {
+                taboviArtikala.addTab(k.getNaziv(), mrezaArtikala(filtrirani, k.getId(), danas));
+            }
+        }
+        taboviArtikala.addTab("Tabela", new JScrollPane(tabelaArtikli));
+        if (odabrana >= 0 && odabrana < taboviArtikala.getTabCount()) {
+            taboviArtikala.setSelectedIndex(odabrana);
+        }
+    }
+
+    private JScrollPane mrezaArtikala(List<Artikal> artikli, Integer glavnaKategorijaId, LocalDate danas) {
+        JPanel mreza = new JPanel(new GridLayout(0, 3, 8, 8));
+        mreza.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        for (Artikal a : artikli) {
+            if (glavnaKategorijaId != null
+                    && glavnaKategorija(a.getKategorijaId()) != glavnaKategorijaId) {
+                continue;
+            }
+            mreza.add(dugmeArtikla(a, danas));
+        }
+        if (mreza.getComponentCount() == 0) {
+            JLabel prazno = new JLabel("Nema artikala u ovoj kategoriji", SwingConstants.CENTER);
+            prazno.setForeground(Color.GRAY);
+            mreza.add(prazno);
+        }
+
+        // omotac prati sirinu viewporta, inace iskace horizontalni scroll
+        JPanel omotac = new JPanel(new BorderLayout()) {
+            @Override
+            public Dimension getPreferredSize() {
+                Dimension d = super.getPreferredSize();
+                Container p = getParent();
+                if (p instanceof JViewport) {
+                    d.width = p.getWidth();
+                }
+                return d;
+            }
+        };
+        omotac.add(mreza, BorderLayout.NORTH);
+        JScrollPane skrol = new JScrollPane(omotac,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        skrol.getVerticalScrollBar().setUnitIncrement(16);
+        skrol.setBorder(null);
+        return skrol;
+    }
+
+    private JButton dugmeArtikla(Artikal a, LocalDate danas) {
+        Akcija ak = baza.aktivnaAkcija(a.getSifra(), danas);
+        String cijena;
+        if (ak == null) {
+            cijena = Util.km(a.getCijena()) + " KM";
+        } else {
+            cijena = "<span style='color:#38823c'>" + Util.km(a.getCijena() * (1 - ak.getPopustProcenat() / 100.0))
+                    + " KM (-" + String.format("%.0f", ak.getPopustProcenat()) + "%)</span>";
+        }
+        JButton btn = new JButton("<html><center>" + a.getNaziv()
+                + "<br>" + cijena + "</center></html>",
+                new ImageIcon(Slike.artikal(a.getSifra(), a.getNaziv(), 52)));
+        btn.setHorizontalTextPosition(SwingConstants.CENTER);
+        btn.setVerticalTextPosition(SwingConstants.BOTTOM);
+        btn.setMargin(new Insets(6, 4, 6, 4));
+        btn.setToolTipText("Šifra: " + a.getSifra() + "  |  Stanje: " + a.getStanje() + " " + a.getJedinicaMjere());
+        if (a.getStanje() <= 0) {
+            btn.setEnabled(false);
+            btn.setToolTipText("Nema na stanju");
+        }
+        btn.addActionListener(e -> dodajUKorpu(a.getSifra(), 1));
+        return btn;
+    }
+
+    private int glavnaKategorija(int kategorijaId) {
+        Kategorija k = baza.nadjiKategoriju(kategorijaId);
+        int zastita = 0;
+        while (k != null && k.getNadkategorijaId() != null && zastita < 10) {
+            k = baza.nadjiKategoriju(k.getNadkategorijaId());
+            zastita++;
+        }
+        if (k == null) {
+            return -1;
+        }
+        return k.getId();
     }
 
     private JPanel paneKorpa() {
@@ -134,10 +233,11 @@ public class ProdavacFrame extends JFrame {
         unos.add(tfSifra);
         unos.add(new JLabel("Količina:"));
         unos.add(tfKolicina);
-        JButton btnDodaj = new JButton("Dodaj u korpu");
+        JButton btnDodaj = UiUtil.dugme("Dodaj u korpu", "plus");
         btnDodaj.addActionListener(e -> dodajIzPolja());
         unos.add(btnDodaj);
         panel.add(unos, BorderLayout.NORTH);
+        tfSifra.setToolTipText("Radi i sa barkod skenerom: skener ukuca šifru i pošalje Enter");
         tfSifra.addActionListener(e -> dodajIzPolja());
         tfKolicina.addActionListener(e -> dodajIzPolja());
 
@@ -154,7 +254,7 @@ public class ProdavacFrame extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JPanel dugmadKorpe = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        JButton btnUkloni = new JButton("Ukloni stavku");
+        JButton btnUkloni = UiUtil.dugme("Ukloni stavku", "kanta");
         JButton btnIsprazni = new JButton("Isprazni korpu");
         btnUkloni.addActionListener(e -> ukloniStavku());
         btnIsprazni.addActionListener(e -> {
@@ -183,6 +283,19 @@ public class ProdavacFrame extends JFrame {
         JPanel gotovina = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         gotovina.add(new JLabel("Predato (KM):"));
         gotovina.add(tfPredato);
+        // najcesce novcanice, klik umjesto kucanja
+        for (int n : new int[]{5, 10, 20, 50}) {
+            JButton brzo = new JButton(String.valueOf(n));
+            brzo.setMargin(new Insets(2, 6, 2, 6));
+            brzo.setToolTipText("Kupac je predao novčanicu od " + n + " KM");
+            brzo.addActionListener(e -> tfPredato.setText(Util.km(n)));
+            gotovina.add(brzo);
+        }
+        JButton btnTacno = new JButton("Tačan iznos");
+        btnTacno.setMargin(new Insets(2, 6, 2, 6));
+        btnTacno.setToolTipText("Kupac je predao tačan iznos računa");
+        btnTacno.addActionListener(e -> tfPredato.setText(Util.km(ukupnoKorpe())));
+        gotovina.add(btnTacno);
         gotovina.add(lPovrat);
         UiUtil.dodaj(panel, gbc, 0, 4, 4, gotovina);
 
@@ -200,14 +313,16 @@ public class ProdavacFrame extends JFrame {
             lPovrat.setText("Povrat: 0.00 KM");
         });
 
-        JButton btnNaplati = new JButton("NAPLATI I ŠTAMPAJ RAČUN");
+        JButton btnNaplati = new JButton("NAPLATI I ŠTAMPAJ RAČUN (F2)", Ikone.ikona("stampac", 18));
         btnNaplati.setFont(btnNaplati.getFont().deriveFont(Font.BOLD, 16f));
         btnNaplati.setBackground(new Color(46, 125, 50));
         btnNaplati.setForeground(Color.WHITE);
         btnNaplati.setOpaque(true);
+        btnNaplati.setIconTextGap(10);
         btnNaplati.addActionListener(e -> naplati());
         gbc.fill = GridBagConstraints.HORIZONTAL;
         UiUtil.dodaj(panel, gbc, 0, 5, 4, btnNaplati);
+        UiUtil.precica(getRootPane(), "F2", btnNaplati);
 
         return panel;
     }
@@ -382,7 +497,7 @@ public class ProdavacFrame extends JFrame {
         private final JTextField tfKol = new JTextField("1", 4);
         private final DefaultTableModel modelStavke =
                 UiUtil.model("Šifra", "Naziv", "Kupljeno", "Vraćeno", "Preostalo", "Cijena sa pop.");
-        private final JTable tabelaStavke = new JTable(modelStavke);
+        private final JTable tabelaStavke = UiUtil.tabela(modelStavke, "Učitajte račun po broju");
         private Racun ucitaniRacun = null;
 
         PovratDijalog() {
@@ -397,11 +512,12 @@ public class ProdavacFrame extends JFrame {
             gore.add(tfBroj);
             gore.add(btnUcitaj);
             add(gore, BorderLayout.NORTH);
+            tfBroj.addActionListener(e -> ucitajRacun());
 
             add(new JScrollPane(tabelaStavke), BorderLayout.CENTER);
 
             JPanel dolje = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
-            JButton btnPovrat = new JButton("Evidentiraj povrat");
+            JButton btnPovrat = UiUtil.dugme("Evidentiraj povrat", "povrat");
             dolje.add(new JLabel("Količina za povrat:"));
             dolje.add(tfKol);
             dolje.add(btnPovrat);
@@ -449,7 +565,7 @@ public class ProdavacFrame extends JFrame {
                     UiUtil.greska(this, "Odaberite stavku računa!");
                     return;
                 }
-                String sifra = (String) modelStavke.getValueAt(red, 0);
+                String sifra = (String) tabelaStavke.getValueAt(red, 0);
                 int kolicina = Util.parseCijeliBroj(tfKol.getText(), "Količina za povrat");
                 Povrat p = baza.evidentirajPovrat(ucitaniRacun, sifra, kolicina, LocalDateTime.now());
                 UiUtil.info(this, "Povrat evidentiran!\nArtikal: " + p.getNazivArtikla()
