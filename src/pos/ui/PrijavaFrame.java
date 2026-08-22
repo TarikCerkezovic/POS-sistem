@@ -31,18 +31,25 @@ public class PrijavaFrame extends JFrame {
         JLabel lUputa = new JLabel("Unesite svoje korisničke podatke", SwingConstants.CENTER);
         lUputa.setFont(lUputa.getFont().deriveFont(Font.BOLD, 13f));
 
-        JButton btnPrijava = new JButton("Prijavi se");
+        
+        JLabel lKatanac = new JLabel(Ikone.ikona("katanac", 72), SwingConstants.CENTER);
+        lKatanac.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 18));
 
-        UiUtil.dodaj(panel, gbc, 0, 0, 2, lUniverzitet);
-        UiUtil.dodaj(panel, gbc, 0, 1, 2, lFakultet);
-        UiUtil.dodaj(panel, gbc, 0, 2, 2, lNaslov);
-        UiUtil.dodaj(panel, gbc, 0, 3, 2, new JSeparator());
-        UiUtil.dodaj(panel, gbc, 0, 4, 2, lUputa);
-        UiUtil.dodaj(panel, gbc, 0, 5, 1, new JLabel("Login:"));
-        UiUtil.dodaj(panel, gbc, 1, 5, 1, tfLogin);
-        UiUtil.dodaj(panel, gbc, 0, 6, 1, new JLabel("Šifra:"));
-        UiUtil.dodaj(panel, gbc, 1, 6, 1, tfSifra);
-        UiUtil.dodaj(panel, gbc, 0, 7, 2, btnPrijava);
+        JButton btnPrijava = UiUtil.dugme("Prijavi se", "osoba");
+
+        UiUtil.dodaj(panel, gbc, 0, 0, 3, lUniverzitet);
+        UiUtil.dodaj(panel, gbc, 0, 1, 3, lFakultet);
+        UiUtil.dodaj(panel, gbc, 0, 2, 3, lNaslov);
+        UiUtil.dodaj(panel, gbc, 0, 3, 3, new JSeparator());
+        UiUtil.dodaj(panel, gbc, 0, 4, 3, lUputa);
+        gbc.gridheight = 3;
+        UiUtil.dodaj(panel, gbc, 0, 5, 1, lKatanac);
+        gbc.gridheight = 1;
+        UiUtil.dodaj(panel, gbc, 1, 5, 1, new JLabel("Login:"));
+        UiUtil.dodaj(panel, gbc, 2, 5, 1, tfLogin);
+        UiUtil.dodaj(panel, gbc, 1, 6, 1, new JLabel("Šifra:"));
+        UiUtil.dodaj(panel, gbc, 2, 6, 1, tfSifra);
+        UiUtil.dodaj(panel, gbc, 1, 7, 2, btnPrijava);
 
         btnPrijava.addActionListener(e -> prijava());
         getRootPane().setDefaultButton(btnPrijava);
@@ -62,8 +69,20 @@ public class PrijavaFrame extends JFrame {
             }
             Korisnik korisnik = Baza.get().prijava(login, sifra);
 
-            UiUtil.info(this, "Prijava uspješna: " + korisnik.getIme()
-                    + " (" + korisnik.getUloga() + ")");
+            JFrame glavni;
+            switch (korisnik.getUloga()) {
+                case ADMINISTRATOR:
+                    glavni = new AdminFrame(korisnik);
+                    break;
+                case PRODAVAC:
+                    glavni = new ProdavacFrame(korisnik);
+                    break;
+                default:
+                    glavni = new MenadzerFrame(korisnik);
+                    break;
+            }
+            glavni.setVisible(true);
+            dispose();
         } catch (IllegalArgumentException ex) {
             UiUtil.greska(this, ex.getMessage());
             tfSifra.setText("");
