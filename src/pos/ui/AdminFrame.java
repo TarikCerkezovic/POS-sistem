@@ -17,7 +17,7 @@ public class AdminFrame extends JFrame {
     private final Korisnik korisnik;
 
     private final DefaultTableModel mArtikli = UiUtil.model("Šifra", "Naziv", "Kategorija", "JM", "Proizvođač", "Stanje", "Cijena (KM)", "Dobavljač");
-    private final JTable tArtikli = new JTable(mArtikli);
+    private final JTable tArtikli = UiUtil.tabela(mArtikli, "Nema evidentiranih artikala");
     private final JTextField tfSifra = new JTextField(8);
     private final JTextField tfNaziv = new JTextField(16);
     private final JTextField tfJM = new JTextField(5);
@@ -28,13 +28,13 @@ public class AdminFrame extends JFrame {
     private String odabranaSifraArtikla = null;
 
     private final DefaultTableModel mKategorije = UiUtil.model("ID", "Naziv", "Nadkategorija");
-    private final JTable tKategorije = new JTable(mKategorije);
+    private final JTable tKategorije = UiUtil.tabela(mKategorije, "Nema evidentiranih kategorija");
     private final JTextField tfKatNaziv = new JTextField(16);
     private final JComboBox<Object> cbNadkategorija = new JComboBox<>();
     private static final String GLAVNA = "— (glavna kategorija)";
 
     private final DefaultTableModel mDobavljaci = UiUtil.model("ID", "Naziv", "Adresa", "Telefon", "E-mail");
-    private final JTable tDobavljaci = new JTable(mDobavljaci);
+    private final JTable tDobavljaci = UiUtil.tabela(mDobavljaci, "Nema evidentiranih dobavljača");
     private final JTextField tfDobNaziv = new JTextField(14);
     private final JTextField tfDobAdresa = new JTextField(16);
     private final JTextField tfDobTelefon = new JTextField(10);
@@ -49,23 +49,23 @@ public class AdminFrame extends JFrame {
     private final DefaultTableModel mStavkeNabavke = UiUtil.model("Šifra", "Artikal", "Količina", "Nab. cijena", "Iznos");
     private final JTable tStavkeNabavke = new JTable(mStavkeNabavke);
     private final DefaultTableModel mNabavke = UiUtil.model("ID", "Datum", "Dobavljač", "Broj stavki", "Ukupno (KM)");
-    private final JTable tNabavke = new JTable(mNabavke);
+    private final JTable tNabavke = UiUtil.tabela(mNabavke, "Nema evidentiranih nabavki");
 
     private final JComboBox<Artikal> cbOtpisArtikal = new JComboBox<>();
     private final JTextField tfOtpisKolicina = new JTextField(5);
     private final JTextField tfOtpisRazlog = new JTextField(20);
     private final DefaultTableModel mOtpisi = UiUtil.model("ID", "Datum", "Šifra", "Artikal", "Količina", "Razlog");
-    private final JTable tOtpisi = new JTable(mOtpisi);
+    private final JTable tOtpisi = UiUtil.tabela(mOtpisi, "Nema evidentiranih otpisa");
 
     private final JComboBox<Artikal> cbAkcijaArtikal = new JComboBox<>();
     private final JTextField tfAkcijaOd = new JTextField(8);
     private final JTextField tfAkcijaDo = new JTextField(8);
     private final JTextField tfAkcijaPopust = new JTextField(5);
     private final DefaultTableModel mAkcije = UiUtil.model("ID", "Šifra", "Artikal", "Od", "Do", "Popust (%)", "Status");
-    private final JTable tAkcije = new JTable(mAkcije);
+    private final JTable tAkcije = UiUtil.tabela(mAkcije, "Nema definisanih akcija");
 
     private final DefaultTableModel mKorisnici = UiUtil.model("ID", "Ime i prezime", "Korisničko ime", "Uloga");
-    private final JTable tKorisnici = new JTable(mKorisnici);
+    private final JTable tKorisnici = UiUtil.tabela(mKorisnici, "Nema korisnika sistema");
     private final JTextField tfKorIme = new JTextField(14);
     private final JTextField tfKorLogin = new JTextField(10);
     private final JPasswordField tfKorLozinka = new JPasswordField(10);
@@ -84,6 +84,15 @@ public class AdminFrame extends JFrame {
         tabovi.addTab("Otpis robe", tabOtpis());
         tabovi.addTab("Akcije i popusti", tabAkcije());
         tabovi.addTab("Korisnici", tabKorisnici());
+
+        // da se moze kucat u combo boxove
+        UiUtil.pretraziv(cbKategorija);
+        UiUtil.pretraziv(cbDobavljac);
+        UiUtil.pretraziv(cbNadkategorija);
+        UiUtil.pretraziv(cbNabDobavljac);
+        UiUtil.pretraziv(cbNabArtikal);
+        UiUtil.pretraziv(cbOtpisArtikal);
+        UiUtil.pretraziv(cbAkcijaArtikal);
 
         setLayout(new BorderLayout());
         add(UiUtil.zaglavlje("POS sistem - Administracija", korisnik, this), BorderLayout.NORTH);
@@ -123,9 +132,9 @@ public class AdminFrame extends JFrame {
         UiUtil.dodaj(forma, gbc, 0, 2, 1, new JLabel("Dobavljač:"));
         UiUtil.dodaj(forma, gbc, 1, 2, 1, cbDobavljac);
 
-        JButton btnDodaj = new JButton("Dodaj artikal");
-        JButton btnIzmijeni = new JButton("Izmijeni");
-        JButton btnObrisi = new JButton("Obriši");
+        JButton btnDodaj = UiUtil.dugme("Dodaj artikal", "plus");
+        JButton btnIzmijeni = UiUtil.dugme("Izmijeni", "olovka");
+        JButton btnObrisi = UiUtil.dugme("Obriši", "kanta");
         JButton btnOcisti = new JButton("Očisti formu");
         JPanel dugmad = new JPanel(new FlowLayout(FlowLayout.LEFT));
         dugmad.add(btnDodaj);
@@ -144,7 +153,8 @@ public class AdminFrame extends JFrame {
             if (e.getValueIsAdjusting() || red < 0) {
                 return;
             }
-            Artikal a = baza.nadjiArtikal((String) mArtikli.getValueAt(red, 0));
+            // preko tabele a ne modela, zbog sortiranja
+            Artikal a = baza.nadjiArtikal((String) tArtikli.getValueAt(red, 0));
             if (a == null) {
                 return;
             }
@@ -245,9 +255,9 @@ public class AdminFrame extends JFrame {
         forma.add(tfKatNaziv);
         forma.add(new JLabel("Nadkategorija:"));
         forma.add(cbNadkategorija);
-        JButton btnDodaj = new JButton("Dodaj");
-        JButton btnIzmijeni = new JButton("Izmijeni");
-        JButton btnObrisi = new JButton("Obriši");
+        JButton btnDodaj = UiUtil.dugme("Dodaj", "plus");
+        JButton btnIzmijeni = UiUtil.dugme("Izmijeni", "olovka");
+        JButton btnObrisi = UiUtil.dugme("Obriši", "kanta");
         forma.add(btnDodaj);
         forma.add(btnIzmijeni);
         forma.add(btnObrisi);
@@ -258,7 +268,7 @@ public class AdminFrame extends JFrame {
             if (e.getValueIsAdjusting() || red < 0) {
                 return;
             }
-            Kategorija k = baza.nadjiKategoriju((Integer) mKategorije.getValueAt(red, 0));
+            Kategorija k = baza.nadjiKategoriju((Integer) tKategorije.getValueAt(red, 0));
             if (k == null) {
                 return;
             }
@@ -292,7 +302,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite kategoriju u tabeli!");
                 }
-                int id = (Integer) mKategorije.getValueAt(red, 0);
+                int id = (Integer) tKategorije.getValueAt(red, 0);
                 baza.izmijeniKategoriju(id, tfKatNaziv.getText(), odabranaNadkategorija());
                 osvjeziSve();
             } catch (IllegalArgumentException ex) {
@@ -306,7 +316,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite kategoriju u tabeli!");
                 }
-                int id = (Integer) mKategorije.getValueAt(red, 0);
+                int id = (Integer) tKategorije.getValueAt(red, 0);
                 if (!UiUtil.potvrda(this, "Obrisati odabranu kategoriju?")) {
                     return;
                 }
@@ -350,9 +360,9 @@ public class AdminFrame extends JFrame {
         UiUtil.dodaj(forma, gbc, 2, 1, 1, new JLabel("E-mail:"));
         UiUtil.dodaj(forma, gbc, 3, 1, 1, tfDobEmail);
 
-        JButton btnDodaj = new JButton("Dodaj");
-        JButton btnIzmijeni = new JButton("Izmijeni");
-        JButton btnObrisi = new JButton("Obriši");
+        JButton btnDodaj = UiUtil.dugme("Dodaj", "plus");
+        JButton btnIzmijeni = UiUtil.dugme("Izmijeni", "olovka");
+        JButton btnObrisi = UiUtil.dugme("Obriši", "kanta");
         JPanel dugmad = new JPanel(new FlowLayout(FlowLayout.LEFT));
         dugmad.add(btnDodaj);
         dugmad.add(btnIzmijeni);
@@ -368,7 +378,7 @@ public class AdminFrame extends JFrame {
             if (e.getValueIsAdjusting() || red < 0) {
                 return;
             }
-            Dobavljac d = baza.nadjiDobavljaca((Integer) mDobavljaci.getValueAt(red, 0));
+            Dobavljac d = baza.nadjiDobavljaca((Integer) tDobavljaci.getValueAt(red, 0));
             if (d == null) {
                 return;
             }
@@ -393,7 +403,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite dobavljača u tabeli!");
                 }
-                int id = (Integer) mDobavljaci.getValueAt(red, 0);
+                int id = (Integer) tDobavljaci.getValueAt(red, 0);
                 baza.izmijeniDobavljaca(id, tfDobNaziv.getText(), tfDobAdresa.getText(), tfDobTelefon.getText(), tfDobEmail.getText());
                 osvjeziSve();
             } catch (IllegalArgumentException ex) {
@@ -407,7 +417,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite dobavljača u tabeli!");
                 }
-                int id = (Integer) mDobavljaci.getValueAt(red, 0);
+                int id = (Integer) tDobavljaci.getValueAt(red, 0);
                 if (!UiUtil.potvrda(this, "Obrisati odabranog dobavljača?")) {
                     return;
                 }
@@ -442,9 +452,9 @@ public class AdminFrame extends JFrame {
         stavkaPanel.add(tfNabKolicina);
         stavkaPanel.add(new JLabel("Nabavna cijena (KM):"));
         stavkaPanel.add(tfNabCijena);
-        JButton btnDodajStavku = new JButton("Dodaj stavku");
-        JButton btnUkloniStavku = new JButton("Ukloni stavku");
-        JButton btnEvidentiraj = new JButton("Evidentiraj nabavku");
+        JButton btnDodajStavku = UiUtil.dugme("Dodaj stavku", "plus");
+        JButton btnUkloniStavku = UiUtil.dugme("Ukloni stavku", "kanta");
+        JButton btnEvidentiraj = UiUtil.dugme("Evidentiraj nabavku", "kutija");
         stavkaPanel.add(btnDodajStavku);
         stavkaPanel.add(btnUkloniStavku);
         stavkaPanel.add(btnEvidentiraj);
@@ -526,7 +536,7 @@ public class AdminFrame extends JFrame {
         forma.add(tfOtpisKolicina);
         forma.add(new JLabel("Razlog:"));
         forma.add(tfOtpisRazlog);
-        JButton btnOtpisi = new JButton("Evidentiraj otpis");
+        JButton btnOtpisi = UiUtil.dugme("Evidentiraj otpis", "otpis");
         forma.add(btnOtpisi);
 
         panel.add(forma, BorderLayout.NORTH);
@@ -564,8 +574,8 @@ public class AdminFrame extends JFrame {
         forma.add(tfAkcijaDo);
         forma.add(new JLabel("Popust (%):"));
         forma.add(tfAkcijaPopust);
-        JButton btnDodaj = new JButton("Dodaj akciju");
-        JButton btnObrisi = new JButton("Obriši akciju");
+        JButton btnDodaj = UiUtil.dugme("Dodaj akciju", "plus");
+        JButton btnObrisi = UiUtil.dugme("Obriši akciju", "kanta");
         forma.add(btnDodaj);
         forma.add(btnObrisi);
 
@@ -595,7 +605,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite akciju u tabeli!");
                 }
-                int id = (Integer) mAkcije.getValueAt(red, 0);
+                int id = (Integer) tAkcije.getValueAt(red, 0);
                 if (!UiUtil.potvrda(this, "Obrisati odabranu akciju?")) {
                     return;
                 }
@@ -623,9 +633,9 @@ public class AdminFrame extends JFrame {
         forma.add(tfKorLozinka);
         forma.add(new JLabel("Uloga:"));
         forma.add(cbUloga);
-        JButton btnDodaj = new JButton("Dodaj");
-        JButton btnIzmijeni = new JButton("Izmijeni");
-        JButton btnObrisi = new JButton("Obriši");
+        JButton btnDodaj = UiUtil.dugme("Dodaj", "plus");
+        JButton btnIzmijeni = UiUtil.dugme("Izmijeni", "olovka");
+        JButton btnObrisi = UiUtil.dugme("Obriši", "kanta");
         forma.add(btnDodaj);
         forma.add(btnIzmijeni);
         forma.add(btnObrisi);
@@ -636,7 +646,7 @@ public class AdminFrame extends JFrame {
             if (e.getValueIsAdjusting() || red < 0) {
                 return;
             }
-            Korisnik k = baza.nadjiKorisnika((Integer) mKorisnici.getValueAt(red, 0));
+            Korisnik k = baza.nadjiKorisnika((Integer) tKorisnici.getValueAt(red, 0));
             if (k == null) {
                 return;
             }
@@ -663,7 +673,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite korisnika u tabeli!");
                 }
-                int id = (Integer) mKorisnici.getValueAt(red, 0);
+                int id = (Integer) tKorisnici.getValueAt(red, 0);
                 baza.izmijeniKorisnika(id, tfKorIme.getText(), tfKorLogin.getText(),
                         new String(tfKorLozinka.getPassword()), (Uloga) cbUloga.getSelectedItem());
                 osvjeziSve();
@@ -678,7 +688,7 @@ public class AdminFrame extends JFrame {
                 if (red < 0) {
                     throw new IllegalArgumentException("Odaberite korisnika u tabeli!");
                 }
-                int id = (Integer) mKorisnici.getValueAt(red, 0);
+                int id = (Integer) tKorisnici.getValueAt(red, 0);
                 if (id == korisnik.getId()) {
                     throw new IllegalArgumentException("Ne možete obrisati vlastiti nalog!");
                 }
