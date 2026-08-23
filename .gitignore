@@ -1,3 +1,8 @@
 lib/*
+!lib/pdfbox2-*.jar
+!lib/fontbox2-*.jar
+!lib/commons-logging-*.jar
+!lib/slf4j-*.jar
+!lib/sqlite-jdbc-*.jar
 out/*
 pos.db
