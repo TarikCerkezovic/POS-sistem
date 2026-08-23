@@ -5,6 +5,7 @@ import pos.model.*;
 import pos.util.Util;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.time.LocalDate;
@@ -20,25 +21,30 @@ public class MenadzerFrame extends JFrame {
     private final JTextField tfDatum = new JTextField(LocalDate.now().format(Util.DATUM), 10);
     private final DefaultTableModel modelPromet =
             UiUtil.model("Broj računa", "Vrijeme", "Prodavač", "Plaćanje", "Iznos (KM)", "Status");
+    private final JTable tPromet = UiUtil.tabela(modelPromet, "Nema izdatih računa u odabranom periodu");
     private final JLabel lPromet = new JLabel(" ");
 
     private final JTextField tfProdOd = new JTextField(LocalDate.now().withDayOfMonth(1).format(Util.DATUM), 10);
     private final JTextField tfProdDo = new JTextField(LocalDate.now().format(Util.DATUM), 10);
     private final DefaultTableModel modelProdavaci =
             UiUtil.model("Prodavač", "Broj računa", "Neto promet (KM)");
+    private final JTable tProdavaci = UiUtil.tabela(modelProdavaci, "Nema prometa u odabranom periodu");
 
     private final JComboBox<Object> cbDobavljac = new JComboBox<>();
     private final DefaultTableModel modelNabavke =
             UiUtil.model("Datum", "Dobavljač", "Šifra", "Artikal", "Količina", "Nab. cijena (KM)", "Iznos (KM)");
+    private final JTable tNabavke = UiUtil.tabela(modelNabavke, "Nema evidentiranih nabavki");
     private final JLabel lNabavke = new JLabel(" ");
 
     private final DefaultTableModel modelZalihe =
             UiUtil.model("Šifra", "Naziv", "Kategorija", "JM", "Stanje", "Cijena (KM)", "Napomena");
+    private final JTable tZalihe = UiUtil.tabela(modelZalihe, "Nema artikala u evidenciji");
 
     private final JTextField tfTopOd = new JTextField(LocalDate.now().withDayOfMonth(1).format(Util.DATUM), 10);
     private final JTextField tfTopDo = new JTextField(LocalDate.now().format(Util.DATUM), 10);
     private final DefaultTableModel modelTop =
             UiUtil.model("Rang", "Šifra", "Naziv", "Prodano (kom)", "Promet (KM)");
+    private final JTable tTop = UiUtil.tabela(modelTop, "Nema prodaja u odabranom periodu");
 
     public MenadzerFrame(Korisnik korisnik) {
         setTitle("POS sistem - Menadžer");
@@ -57,6 +63,36 @@ public class MenadzerFrame extends JFrame {
         tabovi.addTab("Najprodavaniji artikli", tabTop());
         add(tabovi, BorderLayout.CENTER);
 
+        // storno crveno, nisko stanje zuti trougao
+        tPromet.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable tabela, Object vrijednost,
+                    boolean odabrano, boolean fokus, int red, int kolona) {
+                super.getTableCellRendererComponent(tabela, vrijednost, odabrano, fokus, red, kolona);
+                if ("STORNIRAN".equals(vrijednost)) {
+                    setForeground(new Color(178, 60, 50));
+                    setFont(getFont().deriveFont(Font.BOLD));
+                } else if (!odabrano) {
+                    setForeground(tabela.getForeground());
+                }
+                setIcon(null);
+                return this;
+            }
+        });
+        tZalihe.getColumnModel().getColumn(6).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable tabela, Object vrijednost,
+                    boolean odabrano, boolean fokus, int red, int kolona) {
+                super.getTableCellRendererComponent(tabela, vrijednost, odabrano, fokus, red, kolona);
+                if ("NISKO STANJE".equals(vrijednost)) {
+                    setIcon(Ikone.ikona("upozorenje", 14));
+                } else {
+                    setIcon(null);
+                }
+                return this;
+            }
+        });
+
         prikaziPromet();
         prikaziProdavace();
         napuniDobavljace();
@@ -74,12 +110,18 @@ public class MenadzerFrame extends JFrame {
         gore.add(cbPeriod);
         gore.add(new JLabel("Datum (dd.MM.gggg):"));
         gore.add(tfDatum);
+        JButton btnDanas = new JButton("Danas");
+        btnDanas.addActionListener(e -> {
+            tfDatum.setText(LocalDate.now().format(Util.DATUM));
+            prikaziPromet();
+        });
+        gore.add(btnDanas);
         JButton btn = new JButton("Prikaži");
         btn.addActionListener(e -> prikaziPromet());
         gore.add(btn);
         panel.add(gore, BorderLayout.NORTH);
 
-        panel.add(new JScrollPane(new JTable(modelPromet)), BorderLayout.CENTER);
+        panel.add(new JScrollPane(tPromet), BorderLayout.CENTER);
 
         lPromet.setFont(lPromet.getFont().deriveFont(Font.BOLD, 14f));
         panel.add(lPromet, BorderLayout.SOUTH);
@@ -143,12 +185,19 @@ public class MenadzerFrame extends JFrame {
         gore.add(tfProdOd);
         gore.add(new JLabel("Do:"));
         gore.add(tfProdDo);
+        JButton btnMjesec = new JButton("Ovaj mjesec");
+        btnMjesec.addActionListener(e -> {
+            tfProdOd.setText(LocalDate.now().withDayOfMonth(1).format(Util.DATUM));
+            tfProdDo.setText(LocalDate.now().format(Util.DATUM));
+            prikaziProdavace();
+        });
+        gore.add(btnMjesec);
         JButton btn = new JButton("Prikaži");
         btn.addActionListener(e -> prikaziProdavace());
         gore.add(btn);
         panel.add(gore, BorderLayout.NORTH);
 
-        panel.add(new JScrollPane(new JTable(modelProdavaci)), BorderLayout.CENTER);
+        panel.add(new JScrollPane(tProdavaci), BorderLayout.CENTER);
         return panel;
     }
 
@@ -179,7 +228,7 @@ public class MenadzerFrame extends JFrame {
         gore.add(btn);
         panel.add(gore, BorderLayout.NORTH);
 
-        panel.add(new JScrollPane(new JTable(modelNabavke)), BorderLayout.CENTER);
+        panel.add(new JScrollPane(tNabavke), BorderLayout.CENTER);
 
         lNabavke.setFont(lNabavke.getFont().deriveFont(Font.BOLD, 14f));
         panel.add(lNabavke, BorderLayout.SOUTH);
@@ -236,7 +285,7 @@ public class MenadzerFrame extends JFrame {
         gore.add(new JLabel("Artikli sa stanjem ispod 10 komada označeni su napomenom \"NISKO STANJE\"."));
         panel.add(gore, BorderLayout.NORTH);
 
-        panel.add(new JScrollPane(new JTable(modelZalihe)), BorderLayout.CENTER);
+        panel.add(new JScrollPane(tZalihe), BorderLayout.CENTER);
         return panel;
     }
 
@@ -264,12 +313,19 @@ public class MenadzerFrame extends JFrame {
         gore.add(tfTopOd);
         gore.add(new JLabel("Do:"));
         gore.add(tfTopDo);
+        JButton btnMjesec = new JButton("Ovaj mjesec");
+        btnMjesec.addActionListener(e -> {
+            tfTopOd.setText(LocalDate.now().withDayOfMonth(1).format(Util.DATUM));
+            tfTopDo.setText(LocalDate.now().format(Util.DATUM));
+            prikaziTop();
+        });
+        gore.add(btnMjesec);
         JButton btn = new JButton("Prikaži");
         btn.addActionListener(e -> prikaziTop());
         gore.add(btn);
         panel.add(gore, BorderLayout.NORTH);
 
-        panel.add(new JScrollPane(new JTable(modelTop)), BorderLayout.CENTER);
+        panel.add(new JScrollPane(tTop), BorderLayout.CENTER);
         return panel;
     }
 
