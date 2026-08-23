@@ -196,9 +196,9 @@ public class ProdavacFrame extends JFrame {
             cijena = "<span style='color:#38823c'>" + Util.km(a.getCijena() * (1 - ak.getPopustProcenat() / 100.0))
                     + " KM (-" + String.format("%.0f", ak.getPopustProcenat()) + "%)</span>";
         }
-        JButton btn = new JButton("<html><center>" + a.getNaziv()
+        JButton btn = new JButton("<html><center>" + prelomljenNaziv(a.getNaziv())
                 + "<br>" + cijena + "</center></html>",
-                new ImageIcon(Slike.artikal(a.getSifra(), a.getNaziv(), 52)));
+                new ImageIcon(Slike.artikal(a.getSifra(), a.getNaziv(), 64)));
         btn.setHorizontalTextPosition(SwingConstants.CENTER);
         btn.setVerticalTextPosition(SwingConstants.BOTTOM);
         btn.setMargin(new Insets(6, 4, 6, 4));
@@ -209,6 +209,25 @@ public class ProdavacFrame extends JFrame {
         }
         btn.addActionListener(e -> dodajUKorpu(a.getSifra(), 1));
         return btn;
+    }
+
+    // dugacki nazivi u 2 reda da ne bjeze iz dugmeta
+    private static String prelomljenNaziv(String naziv) {
+        if (naziv.length() <= 16) {
+            return naziv;
+        }
+        int sredina = naziv.length() / 2;
+        int lom = -1;
+        for (int i = 0; i < naziv.length(); i++) {
+            if (naziv.charAt(i) == ' '
+                    && (lom == -1 || Math.abs(i - sredina) < Math.abs(lom - sredina))) {
+                lom = i;
+            }
+        }
+        if (lom == -1) {
+            return naziv;
+        }
+        return naziv.substring(0, lom) + "<br>" + naziv.substring(lom + 1);
     }
 
     private int glavnaKategorija(int kategorijaId) {

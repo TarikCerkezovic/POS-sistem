@@ -40,10 +40,14 @@ public final class Slike {
             if (org == null) {
                 return null;
             }
+            // uklopi u kvadrat bez razvlacenja
+            double o = Math.min((double) vel / org.getWidth(), (double) vel / org.getHeight());
+            int w = Math.max(1, (int) Math.round(org.getWidth() * o));
+            int h = Math.max(1, (int) Math.round(org.getHeight() * o));
             BufferedImage rez = new BufferedImage(vel, vel, BufferedImage.TYPE_INT_ARGB);
             Graphics2D g = rez.createGraphics();
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g.drawImage(org, 0, 0, vel, vel, null);
+            g.drawImage(org, (vel - w) / 2, (vel - h) / 2, w, h, null);
             g.dispose();
             return rez;
         } catch (Exception e) {
