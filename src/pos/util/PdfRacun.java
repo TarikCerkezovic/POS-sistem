@@ -6,6 +6,8 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import pos.model.Racun;
 import pos.model.StavkaRacuna;
@@ -23,6 +25,7 @@ public class PdfRacun {
     private static final float MARGINA = 11f;
     private static final float VELICINA_FONTA = 8f;
     private static final float PRORED = 9.6f;
+    private static final float LOGO = 26f;
 
     private static class Linija {
         String tekst;
@@ -42,7 +45,7 @@ public class PdfRacun {
         File fajl = new File(folder, "racun_" + r.getBroj() + ".pdf");
 
         List<Linija> linije = linijeRacuna(r);
-        float visina = 2 * MARGINA + linije.size() * PRORED;
+        float visina = 2 * MARGINA + LOGO + 4f + linije.size() * PRORED;
 
         try (PDDocument dokument = new PDDocument()) {
             PDPage strana = new PDPage(new PDRectangle(SIRINA_STRANE, visina));
@@ -52,9 +55,14 @@ public class PdfRacun {
             PDFont podebljan = ucitajFont(dokument, "DejaVuSansMono-Bold.ttf");
 
             try (PDPageContentStream tok = new PDPageContentStream(dokument, strana)) {
+                // logo na vrhu
+                PDImageXObject logo = LosslessFactory.createFromImage(
+                        dokument, Slike.logo(64));
+                tok.drawImage(logo, (SIRINA_STRANE - LOGO) / 2f, visina - MARGINA - LOGO, LOGO, LOGO);
+
                 tok.beginText();
                 tok.setLeading(PRORED);
-                tok.newLineAtOffset(MARGINA, visina - MARGINA - VELICINA_FONTA);
+                tok.newLineAtOffset(MARGINA, visina - MARGINA - LOGO - 4f - VELICINA_FONTA);
                 for (Linija l : linije) {
                     if (l.bold) {
                         tok.setFont(podebljan, VELICINA_FONTA);
