@@ -31,6 +31,20 @@ public class Baza {
     private Baza() {
         kreirajTabele();
         JPA.emf();
+        long brojKorisnika = prebrojKorisnike();
+        if (brojKorisnika == 0) {
+            popuniTestnePodatke();
+        }
+    }
+
+    private long prebrojKorisnike() {
+        EntityManager em = JPA.em();
+        try {
+            return em.createQuery("SELECT COUNT(k) FROM Korisnik k", Long.class)
+                    .getSingleResult();
+        } finally {
+            em.close();
+        }
     }
 
     private void kreirajTabele() {
@@ -1179,5 +1193,109 @@ public class Baza {
         });
         return rezultat;
     }
-    
+
+    private void popuniTestnePodatke() {
+        dodajKorisnika("Tarik Čerkezović", "admin", "admin", Uloga.ADMINISTRATOR);
+        Korisnik pero = dodajKorisnika("Mahir Halilović", "prodavac", "prodavac", Uloga.PRODAVAC);
+        Korisnik sara = dodajKorisnika("Maid Hrustić", "sara", "sara", Uloga.PRODAVAC);
+        dodajKorisnika("Denis Lazić", "menadzer", "menadzer", Uloga.MENADZER);
+
+        Kategorija pica = dodajKategoriju("Pića", null);
+        Kategorija gazirana = dodajKategoriju("Gazirana pića", pica.getId());
+        Kategorija sokovi = dodajKategoriju("Sokovi", pica.getId());
+        Kategorija topli = dodajKategoriju("Topli napici", pica.getId());
+        Kategorija slatki = dodajKategoriju("Slatki program", null);
+        Kategorija bombone = dodajKategoriju("Bombone", slatki.getId());
+        Kategorija cokolade = dodajKategoriju("Čokolade", slatki.getId());
+        Kategorija mlijecni = dodajKategoriju("Mliječni proizvodi", null);
+        Kategorija namirnice = dodajKategoriju("Osnovne namirnice", null);
+
+        Dobavljac bingo = dodajDobavljaca("Bingo d.o.o.", "Bosanska poljana bb, Tuzla", "035 368 100", "nabavka@bingo.ba");
+        Dobavljac as = dodajDobavljaca("AS Group d.o.o.", "Industrijska zona bb, Jelah", "032 666 100", "prodaja@asgroup.ba");
+        Dobavljac mljekara = dodajDobavljaca("Mljekara Tuzla d.o.o.", "Husinskih rudara 162, Tuzla", "035 280 050", "info@mljekaratz.ba");
+
+        dodajArtikal("1001", "Coca Cola 0.5L", gazirana.getId(), "kom", "Coca-Cola HBC", 2.50, bingo.getId());
+        dodajArtikal("1002", "Fanta 0.5L", gazirana.getId(), "kom", "Coca-Cola HBC", 2.40, bingo.getId());
+        dodajArtikal("1003", "Sok od narandže 1L", sokovi.getId(), "kom", "Vitaminka", 3.20, bingo.getId());
+        dodajArtikal("1004", "Kafa mljevena 250g", topli.getId(), "kom", "Vispak", 5.80, as.getId());
+        dodajArtikal("1005", "Čaj od nane 20/1", topli.getId(), "kom", "Franck", 2.90, as.getId());
+        dodajArtikal("1006", "Bombone Negro 100g", bombone.getId(), "kom", "Pionir", 1.80, as.getId());
+        dodajArtikal("1007", "Milka mliječna 80g", cokolade.getId(), "kom", "Mondelez", 2.20, as.getId());
+        dodajArtikal("1008", "Čokolada za kuhanje 200g", cokolade.getId(), "kom", "Kandit", 3.50, as.getId());
+        dodajArtikal("1009", "Mlijeko 2.8% mm 1L", mlijecni.getId(), "l", "Mljekara Tuzla", 1.90, mljekara.getId());
+        dodajArtikal("1010", "Kajmak 250g", mlijecni.getId(), "kom", "Mljekara Tuzla", 4.50, mljekara.getId());
+        dodajArtikal("1011", "Brašno T-500 1kg", namirnice.getId(), "kg", "Klas", 1.60, as.getId());
+        dodajArtikal("1012", "Šećer kristal 1kg", namirnice.getId(), "kg", "AS", 1.70, as.getId());
+
+        LocalDate danas = LocalDate.now();
+
+        List<StavkaNabavke> n1 = new ArrayList<>();
+        n1.add(stNab("1001", 100, 1.80));
+        n1.add(stNab("1002", 80, 1.70));
+        n1.add(stNab("1003", 50, 2.30));
+        evidentirajNabavku(bingo.getId(), danas.minusDays(20), n1);
+
+        List<StavkaNabavke> n2 = new ArrayList<>();
+        n2.add(stNab("1004", 40, 4.20));
+        n2.add(stNab("1005", 30, 2.00));
+        n2.add(stNab("1006", 60, 1.20));
+        n2.add(stNab("1007", 70, 1.50));
+        n2.add(stNab("1008", 30, 2.50));
+        n2.add(stNab("1011", 100, 1.10));
+        n2.add(stNab("1012", 100, 1.20));
+        evidentirajNabavku(as.getId(), danas.minusDays(15), n2);
+
+        List<StavkaNabavke> n3 = new ArrayList<>();
+        n3.add(stNab("1009", 120, 1.30));
+        n3.add(stNab("1010", 40, 3.20));
+        evidentirajNabavku(mljekara.getId(), danas.minusDays(10), n3);
+
+        evidentirajOtpis("1009", 5, "Istekao rok trajanja", danas.minusDays(5));
+
+        dodajAkciju("1007", danas.minusDays(7), danas.plusDays(7), 15);
+        dodajAkciju("1001", danas.minusDays(3), danas.plusDays(10), 10);
+
+        testniRacun(pero, "GOTOVINA", 20, danas.minusDays(8).atTime(10, 15),
+                st("1001", 2, danas.minusDays(8)), st("1009", 1, danas.minusDays(8)), st("1011", 2, danas.minusDays(8)));
+        testniRacun(sara, "KARTICA", 0, danas.minusDays(6).atTime(12, 40),
+                st("1007", 3, danas.minusDays(6)), st("1004", 1, danas.minusDays(6)));
+        testniRacun(pero, "GOTOVINA", 20, danas.minusDays(3).atTime(9, 5),
+                st("1001", 4, danas.minusDays(3)), st("1012", 1, danas.minusDays(3)));
+        Racun r4 = testniRacun(sara, "GOTOVINA", 20, danas.minusDays(2).atTime(17, 30),
+                st("1009", 2, danas.minusDays(2)), st("1010", 1, danas.minusDays(2)), st("1006", 2, danas.minusDays(2)));
+        testniRacun(pero, "KARTICA", 0, danas.minusDays(1).atTime(11, 20),
+                st("1003", 2, danas.minusDays(1)), st("1005", 1, danas.minusDays(1)), st("1007", 1, danas.minusDays(1)));
+        testniRacun(sara, "GOTOVINA", 10, danas.atTime(8, 45),
+                st("1001", 1, danas), st("1002", 2, danas));
+
+        evidentirajPovrat(r4, "1006", 1, danas.minusDays(1).atTime(10, 0));
+    }
+
+    private StavkaNabavke stNab(String sifra, int kol, double cijena) {
+        Artikal a = nadjiArtikal(sifra);
+        return new StavkaNabavke(sifra, a.getNaziv(), kol, cijena);
+    }
+
+    private StavkaRacuna st(String sifra, int kol, LocalDate datum) {
+        Artikal a = nadjiArtikal(sifra);
+        Akcija ak = aktivnaAkcija(sifra, datum);
+        double popust = 0;
+        if (ak != null) {
+            popust = ak.getPopustProcenat();
+        }
+        return new StavkaRacuna(sifra, a.getNaziv(), kol, a.getCijena(), popust);
+    }
+
+    private Racun testniRacun(Korisnik prodavac, String nacin, double predatoOkvirno, LocalDateTime vrijeme, StavkaRacuna... stavke) {
+        List<StavkaRacuna> lista = new ArrayList<>(Arrays.asList(stavke));
+        double ukupno = 0;
+        for (StavkaRacuna s : lista) {
+            ukupno = ukupno + s.iznos();
+        }
+        double predato = 0;
+        if ("GOTOVINA".equals(nacin)) {
+            predato = Math.max(predatoOkvirno, Math.ceil(ukupno / 10.0) * 10.0);
+        }
+        return izdajRacun(prodavac, lista, nacin, predato, vrijeme);
+    }
 }
