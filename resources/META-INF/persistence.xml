@@ -28,7 +28,9 @@
 
         <properties>
             <property name="jakarta.persistence.jdbc.driver" value="org.sqlite.JDBC"/>
-            <property name="jakarta.persistence.jdbc.url" value="jdbc:sqlite:pos.db"/>
+            <!-- WAL: bez njega je upis racuna ~100x sporiji (vidi Baza.URL) -->
+            <property name="jakarta.persistence.jdbc.url"
+                      value="jdbc:sqlite:pos.db?journal_mode=WAL&amp;synchronous=NORMAL"/>
 
             <property name="hibernate.dialect" value="org.hibernate.community.dialect.SQLiteDialect"/>
 

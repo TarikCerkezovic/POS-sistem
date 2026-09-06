@@ -39,4 +39,27 @@ public class Util {
             throw new IllegalArgumentException("Neispravan format datuma! Očekivano: dd.MM.gggg (npr. 22.03.2026)");
         }
     }
+
+    // varijante za polja filtera: prazno polje znaci "bez filtera" pa se vraca null
+
+    public static Double parseBrojOpcioni(String s, String nazivPolja) {
+        if (s == null || s.trim().isEmpty()) {
+            return null;
+        }
+        return parseBroj(s, nazivPolja);
+    }
+
+    public static Integer parseCijeliBrojOpcioni(String s, String nazivPolja) {
+        if (s == null || s.trim().isEmpty()) {
+            return null;
+        }
+        return parseCijeliBroj(s, nazivPolja);
+    }
+
+    public static LocalDate parseDatumOpcioni(String s) {
+        if (s == null || s.trim().isEmpty()) {
+            return null;
+        }
+        return parseDatum(s);
+    }
 }

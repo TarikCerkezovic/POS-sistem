@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDate;
 
+// akcija moze biti na jedan artikal (sifraArtikla) ili na cijelu kategoriju
+// sa svim podkategorijama (kategorijaId) - popunjeno je tacno jedno od ta dva.
+// ako artikal ima svoju akciju, ona ima prednost nad akcijom kategorije.
 @Entity
 @Table(name = "akcija")
 public class Akcija implements Serializable {
@@ -15,11 +18,11 @@ public class Akcija implements Serializable {
     @Column(name = "id")
     private int id;
 
-    @Column(name = "sifra_artikla", nullable = false)
+    @Column(name = "sifra_artikla")
     private String sifraArtikla;
 
-    @Transient
-    private String nazivArtikla;
+    @Column(name = "kategorija_id")
+    private Integer kategorijaId;
 
     @Column(name = "od_datuma", nullable = false)
     private LocalDate odDatuma;
@@ -32,11 +35,11 @@ public class Akcija implements Serializable {
 
     protected Akcija() { }
 
-    public Akcija(int id, String sifraArtikla, String nazivArtikla,
+    public Akcija(int id, String sifraArtikla, Integer kategorijaId,
                   LocalDate odDatuma, LocalDate doDatuma, double popustProcenat) {
         this.id = id;
         this.sifraArtikla = sifraArtikla;
-        this.nazivArtikla = nazivArtikla;
+        this.kategorijaId = kategorijaId;
         this.odDatuma = odDatuma;
         this.doDatuma = doDatuma;
         this.popustProcenat = popustProcenat;
@@ -44,7 +47,7 @@ public class Akcija implements Serializable {
 
     public int getId() { return id; }
     public String getSifraArtikla() { return sifraArtikla; }
-    public String getNazivArtikla() { return nazivArtikla; }
+    public Integer getKategorijaId() { return kategorijaId; }
     public LocalDate getOdDatuma() { return odDatuma; }
     public LocalDate getDoDatuma() { return doDatuma; }
     public double getPopustProcenat() { return popustProcenat; }
