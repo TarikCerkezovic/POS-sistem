@@ -109,6 +109,37 @@ public final class Ikone {
             g.setColor(Color.WHITE);
             g.fillOval(c - m / 2, c + m / 2, m, m);
             break;
+        case "kalendar":
+            g.setColor(PLAVA);
+            g.drawRect(m, 2 * m, v - 2 * m, v - 3 * m);
+            g.drawLine(m, 2 * m + m, v - m, 2 * m + m);
+            g.drawLine(c - m, m, c - m, 2 * m);
+            g.drawLine(c + m, m, c + m, 2 * m);
+            g.fillRect(c - m / 2, c, m, m);
+            break;
+        case "pdf":
+            g.setColor(CRVENA);
+            g.drawRect(2 * m, m, v - 4 * m, v - 2 * m);
+            g.drawLine(3 * m, 3 * m, v - 3 * m, 3 * m);
+            g.drawLine(3 * m, c, v - 3 * m, c);
+            g.drawLine(3 * m, v - 3 * m, c, v - 3 * m);
+            break;
+        case "filter":
+            g.setColor(PLAVA);
+            g.drawLine(m, m, v - m, m);
+            g.drawLine(m, m, c - m / 2, c);
+            g.drawLine(v - m, m, c + m / 2, c);
+            g.drawLine(c - m / 2, c, c - m / 2, v - m);
+            g.drawLine(c + m / 2, c, c + m / 2, v - 2 * m);
+            break;
+        case "grafikon":
+            g.setColor(PLAVA);
+            g.drawLine(m, m, m, v - m);
+            g.drawLine(m, v - m, v - m, v - m);
+            g.drawLine(2 * m + m / 2, v - 2 * m, 2 * m + m / 2, c);
+            g.drawLine(c + m / 2, v - 2 * m, c + m / 2, 2 * m);
+            g.drawLine(v - 2 * m, v - 2 * m, v - 2 * m, c - m);
+            break;
         case "odjava":
             g.setColor(SIVA);
             g.drawRect(m, m, c - m, v - 2 * m);
