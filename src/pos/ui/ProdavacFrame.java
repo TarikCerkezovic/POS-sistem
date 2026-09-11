@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ProdavacFrame extends JFrame {
 
@@ -26,7 +27,7 @@ public class ProdavacFrame extends JFrame {
 
     private final List<StavkaRacuna> korpa = new ArrayList<>();
 
-    private final JTextField tfPretraga = new JTextField();
+    private final PoljePretrage ppPretraga = UiUtil.poljeArtikla(24);
     private final JTabbedPane taboviArtikala = new JTabbedPane();
     private final DefaultTableModel modelArtikli =
             UiUtil.model("Šifra", "Naziv", "Cijena (KM)", "Stanje", "Popust");
@@ -51,8 +52,11 @@ public class ProdavacFrame extends JFrame {
 
         setTitle("POS sistem - Prodavač");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
+        UiUtil.ikonaProzora(this);
         setSize(1150, 700);
         setLocationRelativeTo(null);
+        // radni prozori idu preko cijelog ekrana (prijava ostaje mala)
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
         setLayout(new BorderLayout());
 
         JPanel zaglavlje = UiUtil.zaglavlje("Prodaja i izdavanje računa", korisnik, this);
@@ -76,6 +80,15 @@ public class ProdavacFrame extends JFrame {
         UiUtil.precica(getRootPane(), "F8", btnStorno);
 
         osvjeziArtikle();
+
+        // kad prodja ponoc, akcijske cijene na dugmadima vise ne vaze - provjera
+        // svake minute i osvjezavanje cim se promijeni datum
+        javax.swing.Timer provjeraDatuma = new javax.swing.Timer(60000, e -> {
+            if (!LocalDate.now().equals(datumPrikaza)) {
+                osvjeziArtikle();
+            }
+        });
+        provjeraDatuma.start();
     }
 
     private JPanel paneArtikli() {
@@ -85,10 +98,11 @@ public class ProdavacFrame extends JFrame {
 
         JPanel gore = new JPanel(new BorderLayout(6, 0));
         gore.add(new JLabel("Pretraga:"), BorderLayout.WEST);
-        gore.add(tfPretraga, BorderLayout.CENTER);
+        gore.add(ppPretraga, BorderLayout.CENTER);
         panel.add(gore, BorderLayout.NORTH);
 
-        tfPretraga.getDocument().addDocumentListener(new DocumentListener() {
+        // mreza i tabela se filtriraju dok se kuca (listu prijedloga vodi PoljePretrage)
+        ppPretraga.polje().getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent e) { osvjeziArtikle(); }
             public void removeUpdate(DocumentEvent e) { osvjeziArtikle(); }
             public void changedUpdate(DocumentEvent e) { osvjeziArtikle(); }
@@ -111,25 +125,32 @@ public class ProdavacFrame extends JFrame {
         return panel;
     }
 
+    // mreza i tabela prikazuju najvise ovoliko artikala - ostatak se dobija pretragom,
+    // pa prozor radi i kad su u bazi milioni artikala
+    private static final int LIMIT_PRIKAZA = 300;
+
+    // datum za koji su izracunati popusti na dugmadima - poslije ponoci se osvjezi,
+    // da mreza ne prikazuje jucerasnje akcijske cijene
+    private LocalDate datumPrikaza = LocalDate.now();
+
     private void osvjeziArtikle() {
-        String filter = tfPretraga.getText().trim().toLowerCase();
-        LocalDate danas = LocalDate.now();
+        datumPrikaza = LocalDate.now();
+        // filtriranje radi baza, a aktivni popusti se povuku jednim upitom
+        pos.data.Filteri.FilterArtikala f = new pos.data.Filteri.FilterArtikala();
+        f.tekst = ppPretraga.getText();
+        List<Artikal> filtrirani = baza.artikliFiltrirano(f, 0, LIMIT_PRIKAZA);
+        // aktivne akcije (na artikle i na kategorije) povuku se jednom,
+        // a efektivni popust po artiklu se rjesava u memoriji
+        Baza.AktivneAkcije popusti = baza.aktivneAkcije(LocalDate.now());
 
         modelArtikli.setRowCount(0);
-        List<Artikal> filtrirani = new ArrayList<>();
-        for (Artikal a : baza.getArtikli()) {
-            if (!filter.isEmpty()
-                    && !a.getNaziv().toLowerCase().contains(filter)
-                    && !a.getSifra().toLowerCase().contains(filter)) {
-                continue;
-            }
-            filtrirani.add(a);
-            Akcija ak = baza.aktivnaAkcija(a.getSifra(), danas);
+        for (Artikal a : filtrirani) {
+            Double procenat = popusti.popustZa(a);
             String popust;
-            if (ak == null) {
+            if (procenat == null) {
                 popust = "-";
             } else {
-                popust = String.format("%.0f%%", ak.getPopustProcenat());
+                popust = String.format("%.0f%%", procenat);
             }
             modelArtikli.addRow(new Object[]{
                     a.getSifra(), a.getNaziv(), Util.km(a.getCijena()), a.getStanje(), popust});
@@ -137,10 +158,21 @@ public class ProdavacFrame extends JFrame {
 
         int odabrana = taboviArtikala.getSelectedIndex();
         taboviArtikala.removeAll();
-        taboviArtikala.addTab("Svi artikli", mrezaArtikala(filtrirani, null, danas));
+        String naslovSvi = "Svi artikli";
+        if (filtrirani.size() >= LIMIT_PRIKAZA) {
+            naslovSvi = "Svi artikli (prvih " + LIMIT_PRIKAZA + ")";
+        }
+        taboviArtikala.addTab(naslovSvi, mrezaArtikala(filtrirani, popusti, filtrirani.size() >= LIMIT_PRIKAZA));
         for (Kategorija k : baza.getKategorije()) {
             if (k.getNadkategorijaId() == null) {
-                taboviArtikala.addTab(k.getNaziv(), mrezaArtikala(filtrirani, k.getId(), danas));
+                // svaka glavna kategorija ima svoj upit sa svojim limitom, da tabovi
+                // ne ostanu prazni samo zato sto je opsti prikaz odsjecen na limitu
+                pos.data.Filteri.FilterArtikala fk = new pos.data.Filteri.FilterArtikala();
+                fk.tekst = ppPretraga.getText();
+                fk.kategorijaId = k.getId();
+                List<Artikal> uKategoriji = baza.artikliFiltrirano(fk, 0, LIMIT_PRIKAZA);
+                taboviArtikala.addTab(k.getNaziv(),
+                        mrezaArtikala(uKategoriji, popusti, uKategoriji.size() >= LIMIT_PRIKAZA));
             }
         }
         taboviArtikala.addTab("Tabela", new JScrollPane(tabelaArtikli));
@@ -149,21 +181,22 @@ public class ProdavacFrame extends JFrame {
         }
     }
 
-    private JScrollPane mrezaArtikala(List<Artikal> artikli, Integer glavnaKategorijaId, LocalDate danas) {
+    private JScrollPane mrezaArtikala(List<Artikal> artikli, Baza.AktivneAkcije popusti, boolean odsjeceno) {
         JPanel mreza = new JPanel(new GridLayout(0, 3, 8, 8));
         mreza.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
         for (Artikal a : artikli) {
-            if (glavnaKategorijaId != null
-                    && glavnaKategorija(a.getKategorijaId()) != glavnaKategorijaId) {
-                continue;
-            }
-            mreza.add(dugmeArtikla(a, danas));
+            mreza.add(dugmeArtikla(a, popusti.popustZa(a)));
         }
         if (mreza.getComponentCount() == 0) {
             JLabel prazno = new JLabel("Nema artikala u ovoj kategoriji", SwingConstants.CENTER);
             prazno.setForeground(Color.GRAY);
             mreza.add(prazno);
+        } else if (odsjeceno) {
+            JLabel jos = new JLabel("<html><center>Prikazano prvih " + LIMIT_PRIKAZA
+                    + " artikala.<br>Suzite pretragu za ostale.</center></html>", SwingConstants.CENTER);
+            jos.setForeground(Color.GRAY);
+            mreza.add(jos);
         }
 
         // omotac prati sirinu viewporta, inace iskace horizontalni scroll
@@ -187,14 +220,13 @@ public class ProdavacFrame extends JFrame {
         return skrol;
     }
 
-    private JButton dugmeArtikla(Artikal a, LocalDate danas) {
-        Akcija ak = baza.aktivnaAkcija(a.getSifra(), danas);
+    private JButton dugmeArtikla(Artikal a, Double popust) {
         String cijena;
-        if (ak == null) {
+        if (popust == null) {
             cijena = Util.km(a.getCijena()) + " KM";
         } else {
-            cijena = "<span style='color:#38823c'>" + Util.km(a.getCijena() * (1 - ak.getPopustProcenat() / 100.0))
-                    + " KM (-" + String.format("%.0f", ak.getPopustProcenat()) + "%)</span>";
+            cijena = "<span style='color:#38823c'>" + Util.km(a.getCijena() * (1 - popust / 100.0))
+                    + " KM (-" + String.format("%.0f", popust) + "%)</span>";
         }
         JButton btn = new JButton("<html><center>" + prelomljenNaziv(a.getNaziv())
                 + "<br>" + cijena + "</center></html>",
@@ -228,19 +260,6 @@ public class ProdavacFrame extends JFrame {
             return naziv;
         }
         return naziv.substring(0, lom) + "<br>" + naziv.substring(lom + 1);
-    }
-
-    private int glavnaKategorija(int kategorijaId) {
-        Kategorija k = baza.nadjiKategoriju(kategorijaId);
-        int zastita = 0;
-        while (k != null && k.getNadkategorijaId() != null && zastita < 10) {
-            k = baza.nadjiKategoriju(k.getNadkategorijaId());
-            zastita++;
-        }
-        if (k == null) {
-            return -1;
-        }
-        return k.getId();
     }
 
     private JPanel paneKorpa() {
@@ -614,13 +633,24 @@ public class ProdavacFrame extends JFrame {
                 UiUtil.greska(this, "Račun je već storniran!");
                 return;
             }
-            boolean potvrdjeno = UiUtil.potvrda(this, "Stornirati račun " + r.getBroj()
-                    + " (iznos " + Util.km(r.ukupno()) + " KM)?\nPreostala roba se vraća na stanje.");
+            // ako je dio robe vec vracen kroz povrat, kupcu se vraca samo ostatak,
+            // a ne puni iznos racuna
+            double vecVraceno = baza.vraceniIznosRacuna(r.getBroj());
+            double zaPovrat = Util.round2(r.ukupno() - vecVraceno);
+            String poruka = "Stornirati račun " + r.getBroj() + "?\n"
+                    + "Iznos računa: " + Util.km(r.ukupno()) + " KM\n";
+            if (vecVraceno > 0) {
+                poruka = poruka + "Već vraćeno kroz povrate: " + Util.km(vecVraceno) + " KM\n";
+            }
+            poruka = poruka + "Za povrat kupcu: " + Util.km(zaPovrat)
+                    + " KM\nPreostala roba se vraća na stanje.";
+            boolean potvrdjeno = UiUtil.potvrda(this, poruka);
             if (!potvrdjeno) {
                 return;
             }
             baza.stornirajRacun(r);
-            UiUtil.info(this, "Račun " + r.getBroj() + " je storniran.");
+            UiUtil.info(this, "Račun " + r.getBroj() + " je storniran.\nKupcu se vraća "
+                    + Util.km(zaPovrat) + " KM.");
             osvjeziArtikle();
         } catch (IllegalArgumentException ex) {
             UiUtil.greska(this, ex.getMessage());

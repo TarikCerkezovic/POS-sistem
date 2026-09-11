@@ -14,6 +14,7 @@ public class PrijavaFrame extends JFrame {
     public PrijavaFrame() {
         super("POS sistem - Prijava na sistem");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
+        UiUtil.ikonaProzora(this);
 
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(25, 35, 25, 35));

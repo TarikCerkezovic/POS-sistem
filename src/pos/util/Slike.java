@@ -27,6 +27,40 @@ public final class Slike {
         return img;
     }
 
+    // kad se slika artikla promijeni, kesirane velicine se moraju izbaciti
+    public static synchronized void zaboraviSliku(String sifra) {
+        kes.keySet().removeIf(kljuc -> kljuc.startsWith(sifra + "@"));
+    }
+
+    public static boolean imaSliku(String sifra) {
+        return new File("images", sifra + ".png").exists()
+                || new File("images", sifra + ".jpg").exists();
+    }
+
+    // snima odabrani fajl kao images/<sifra>.png (uvijek png, stara jpg se ukloni)
+    public static void snimiSliku(String sifra, File izvor) throws java.io.IOException {
+        BufferedImage slika = ImageIO.read(izvor);
+        if (slika == null) {
+            throw new java.io.IOException("Odabrani fajl nije slika koju je moguće učitati!");
+        }
+        File folder = new File("images");
+        if (!folder.exists() && !folder.mkdirs()) {
+            throw new java.io.IOException("Nije moguće kreirati folder \"images\"!");
+        }
+        ImageIO.write(slika, "png", new File(folder, sifra + ".png"));
+        File staraJpg = new File(folder, sifra + ".jpg");
+        if (staraJpg.exists()) {
+            staraJpg.delete();
+        }
+        zaboraviSliku(sifra);
+    }
+
+    public static void obrisiSliku(String sifra) {
+        new File("images", sifra + ".png").delete();
+        new File("images", sifra + ".jpg").delete();
+        zaboraviSliku(sifra);
+    }
+
     private static Image izFajla(String sifra, int vel) {
         File f = new File("images", sifra + ".png");
         if (!f.exists()) {
