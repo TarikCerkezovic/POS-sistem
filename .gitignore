@@ -6,3 +6,7 @@ lib/*
 !lib/sqlite-jdbc-*.jar
 out/*
 pos.db
+pos.db-wal
+pos.db-shm
+racuni/
+izvjestaji/
